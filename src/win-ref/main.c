@@ -9,9 +9,13 @@
 // P1: b1 button2 (jump), b2 button1 (attack), b4 down, b5 up, b6 right, b7 left
 // SYSTEM: b0 coin1, b1 coin2, b3 service1, b4 start1, b5 start2
 //
-// Keys:  arrows = move   Space = attack (button1)   Alt = jump (button2)
+// Keys:  arrows = move   Z = jump   X = attack
+//        C = rapid left/right turbo (alternates every frame)
 //        5 = insert coin   1 = 1P start   2 = 2P start   9 = service   ESC = quit
 static void poll_input(system2 *m) {
+    static unsigned turbo_tick = 0;
+    turbo_tick++;
+
     const Uint8 *k = SDL_GetKeyboardState(NULL);
     uint8_t p1 = 0, sys = 0;
 
@@ -19,8 +23,13 @@ static void poll_input(system2 *m) {
     if (k[SDL_SCANCODE_RIGHT]) p1 |= 0x40;
     if (k[SDL_SCANCODE_UP])    p1 |= 0x20;
     if (k[SDL_SCANCODE_DOWN])  p1 |= 0x10;
-    if (k[SDL_SCANCODE_SPACE]) p1 |= 0x04;  // attack  (button1)
-    if (k[SDL_SCANCODE_LALT] || k[SDL_SCANCODE_RALT]) p1 |= 0x02;  // jump (button2)
+    if (k[SDL_SCANCODE_Z]) p1 |= 0x02;  // jump   (button2)
+    if (k[SDL_SCANCODE_X]) p1 |= 0x04;  // attack (button1)
+
+    // C: 매 프레임 좌/우를 교대로 눌러 빠른 방향 전환
+    if (k[SDL_SCANCODE_C]) {
+        if (turbo_tick & 1) p1 |= 0x80; else p1 |= 0x40;
+    }
 
     if (k[SDL_SCANCODE_5]) sys |= 0x01;  // coin1
     if (k[SDL_SCANCODE_6]) sys |= 0x02;  // coin2
@@ -104,7 +113,7 @@ int main(int argc, char **argv) {
 
     if (!headless_frames) {
         printf("Wonder Boy: Monster Land (reference)\n"
-               "  Arrows = move   Space = attack   Alt = jump\n"
+               "  Arrows = move   Z = jump   X = attack   C = turbo L/R\n"
                "  5 = insert coin   1 = 1P start   2 = 2P start\n"
                "  9 = service   F12 = screenshot   ESC = quit\n");
         fflush(stdout);
