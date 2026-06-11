@@ -13,11 +13,14 @@ void cfg_defaults(wbml_cfg *c) {
     c->k_turbo  = SDL_SCANCODE_C;
     c->k_coin   = SDL_SCANCODE_5;
     c->k_start1 = SDL_SCANCODE_1;
-    c->joy_index    = -1;
-    c->joy_axis_x   = 0;
-    c->joy_axis_y   = 1;
+    c->joy_index      = -1;
     c->joy_btn_jump   = 0;
     c->joy_btn_attack = 1;
+    c->joy_btn_turbo  = -1;
+    c->joy_btn_left   = -1;
+    c->joy_btn_right  = -1;
+    c->joy_btn_up     = -1;
+    c->joy_btn_down   = -1;
 }
 
 int cfg_load(wbml_cfg *c, const char *path) {
@@ -32,11 +35,14 @@ int cfg_load(wbml_cfg *c, const char *path) {
         TRY_SC(k_jump) TRY_SC(k_attack) TRY_SC(k_turbo)
         TRY_SC(k_coin) TRY_SC(k_start1)
 #undef TRY_SC
-        if      (!strcmp(key, "joy_index"))     c->joy_index      = atoi(val);
-        else if (!strcmp(key, "joy_axis_x"))    c->joy_axis_x     = atoi(val);
-        else if (!strcmp(key, "joy_axis_y"))    c->joy_axis_y     = atoi(val);
+        if      (!strcmp(key, "joy_index"))      c->joy_index      = atoi(val);
         else if (!strcmp(key, "joy_btn_jump"))   c->joy_btn_jump   = atoi(val);
         else if (!strcmp(key, "joy_btn_attack")) c->joy_btn_attack = atoi(val);
+        else if (!strcmp(key, "joy_btn_turbo"))  c->joy_btn_turbo  = atoi(val);
+        else if (!strcmp(key, "joy_btn_left"))   c->joy_btn_left   = atoi(val);
+        else if (!strcmp(key, "joy_btn_right"))  c->joy_btn_right  = atoi(val);
+        else if (!strcmp(key, "joy_btn_up"))     c->joy_btn_up     = atoi(val);
+        else if (!strcmp(key, "joy_btn_down"))   c->joy_btn_down   = atoi(val);
     }
     fclose(f);
     return 1;
@@ -52,9 +58,10 @@ void cfg_save(const wbml_cfg *c, const char *path) {
             SDL_GetScancodeName(c->k_jump),  SDL_GetScancodeName(c->k_attack),
             SDL_GetScancodeName(c->k_turbo), SDL_GetScancodeName(c->k_coin),
             SDL_GetScancodeName(c->k_start1));
-    fprintf(f, "joy_index=%d\njoy_axis_x=%d\njoy_axis_y=%d\n",
-            c->joy_index, c->joy_axis_x, c->joy_axis_y);
-    fprintf(f, "joy_btn_jump=%d\njoy_btn_attack=%d\n",
-            c->joy_btn_jump, c->joy_btn_attack);
+    fprintf(f, "joy_index=%d\n", c->joy_index);
+    fprintf(f, "joy_btn_jump=%d\njoy_btn_attack=%d\njoy_btn_turbo=%d\n",
+            c->joy_btn_jump, c->joy_btn_attack, c->joy_btn_turbo);
+    fprintf(f, "joy_btn_left=%d\njoy_btn_right=%d\njoy_btn_up=%d\njoy_btn_down=%d\n",
+            c->joy_btn_left, c->joy_btn_right, c->joy_btn_up, c->joy_btn_down);
     fclose(f);
 }

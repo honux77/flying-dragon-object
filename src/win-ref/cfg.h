@@ -6,8 +6,8 @@ typedef struct {
     SDL_Scancode k_jump, k_attack, k_turbo;
     SDL_Scancode k_coin, k_start1;
     int joy_index;      // -1 = disabled
-    int joy_axis_x, joy_axis_y;
-    int joy_btn_jump, joy_btn_attack;
+    int joy_btn_jump, joy_btn_attack, joy_btn_turbo;
+    int joy_btn_left, joy_btn_right, joy_btn_up, joy_btn_down;
 } wbml_cfg;
 
 void cfg_defaults(wbml_cfg *c);

@@ -6,7 +6,7 @@
 
 // ---------------------------------------------------------------------------
 // 8x8 bitmap font — printable ASCII 0x20-0x7E (95 glyphs)
-// Each byte is one row; MSB = leftmost pixel.
+// Each byte is one row; LSB = leftmost pixel (font8x8_basic convention).
 // Source: font8x8_basic (public domain)
 // ---------------------------------------------------------------------------
 static const uint8_t g_font[95][8] = {
@@ -128,7 +128,7 @@ static void draw_char(SDL_Renderer *r, int x, int y, unsigned char c, Col col) {
     for (int row = 0; row < 8; row++) {
         uint8_t bits = g[row];
         for (int col2 = 0; col2 < 8; col2++)
-            if (bits & (0x80 >> col2))
+            if (bits & (1 << col2))
                 SDL_RenderDrawPoint(r, x + col2, y + row);
     }
 }
@@ -176,9 +176,10 @@ static SDL_Scancode *k_fields(wbml_cfg *c, int i) {
 
 // Joystick names for display
 static const char *joy_row_labels[] = {
-    "DEVICE", "JUMP BTN", "ATTACK BTN", "H-AXIS", "V-AXIS"
+    "DEVICE", "JUMP BTN", "ATTACK BTN", "TURBO BTN",
+    "LEFT BTN", "RIGHT BTN", "UP BTN", "DOWN BTN"
 };
-#define NUM_JOY_ROWS 5
+#define NUM_JOY_ROWS 8
 
 // Open all connected joysticks for event detection
 static SDL_Joystick *g_joys[16];
@@ -273,6 +274,17 @@ static void draw_keys(SDL_Renderer *r, wbml_cfg *cfg, int sel, int rebinding) {
 // ---------------------------------------------------------------------------
 // JOYSTICK SETTINGS
 // ---------------------------------------------------------------------------
+static void fmt_btn(char *buf, size_t n, int v) {
+    switch (v) {
+    case -1: snprintf(buf, n, "---");       break;
+    case -2: snprintf(buf, n, "Hat LEFT");  break;
+    case -3: snprintf(buf, n, "Hat RIGHT"); break;
+    case -4: snprintf(buf, n, "Hat UP");    break;
+    case -5: snprintf(buf, n, "Hat DOWN");  break;
+    default: snprintf(buf, n, "Button %d", v); break;
+    }
+}
+
 static void draw_joy_row(SDL_Renderer *r, wbml_cfg *cfg, int i, int y,
                          int is_sel, int detecting) {
     Col lc = is_sel ? YELLOW : WHITE;
@@ -283,13 +295,14 @@ static void draw_joy_row(SDL_Renderer *r, wbml_cfg *cfg, int i, int y,
     draw_str(r, CX(2), y, lbuf, lc);
 
     if (detecting && is_sel) {
-        draw_str(r, CX(13), y, "...", RED);
+        const char *msg = (i >= 4) ? "BTN/HAT(DEL=CLR)" : "PRESS BTN(DEL=CLR)";
+        draw_str(r, CX(13), y, msg, RED);
         return;
     }
 
     char vbuf[32];
     switch (i) {
-    case 0: // DEVICE
+    case 0:
         if (cfg->joy_index < 0) {
             snprintf(vbuf, sizeof(vbuf), "DISABLED");
         } else {
@@ -298,10 +311,14 @@ static void draw_joy_row(SDL_Renderer *r, wbml_cfg *cfg, int i, int y,
             snprintf(vbuf, sizeof(vbuf), "[%d] %.14s", cfg->joy_index, name);
         }
         break;
-    case 1: snprintf(vbuf, sizeof(vbuf), "Button %d", cfg->joy_btn_jump);   break;
-    case 2: snprintf(vbuf, sizeof(vbuf), "Button %d", cfg->joy_btn_attack); break;
-    case 3: snprintf(vbuf, sizeof(vbuf), "Axis %d",   cfg->joy_axis_x);     break;
-    case 4: snprintf(vbuf, sizeof(vbuf), "Axis %d",   cfg->joy_axis_y);     break;
+    case 1: fmt_btn(vbuf, sizeof(vbuf), cfg->joy_btn_jump);   break;
+    case 2: fmt_btn(vbuf, sizeof(vbuf), cfg->joy_btn_attack); break;
+    case 3: fmt_btn(vbuf, sizeof(vbuf), cfg->joy_btn_turbo);  break;
+    case 4: fmt_btn(vbuf, sizeof(vbuf), cfg->joy_btn_left);   break;
+    case 5: fmt_btn(vbuf, sizeof(vbuf), cfg->joy_btn_right);  break;
+    case 6: fmt_btn(vbuf, sizeof(vbuf), cfg->joy_btn_up);     break;
+    case 7: fmt_btn(vbuf, sizeof(vbuf), cfg->joy_btn_down);   break;
+    default: snprintf(vbuf, sizeof(vbuf), "?"); break;
     }
     draw_str(r, CX(13), y, vbuf, vc);
 }
@@ -327,18 +344,33 @@ static void draw_joy(SDL_Renderer *r, wbml_cfg *cfg, int sel, int detecting) {
     draw_str(r, CX(2), y_back, "BACK", bc);
 }
 
-// Hint for joystick rows
-static void draw_joy_hint(SDL_Renderer *r, int sel) {
-    const char *hints[] = {
-        "L/R:CHANGE DEVICE",
-        "ENTER:PRESS BUTTON",
-        "ENTER:PRESS BUTTON",
-        "ENTER:MOVE L/R",
-        "ENTER:MOVE UP/DN",
-    };
-    if (sel < NUM_JOY_ROWS) {
-        draw_str_c(r, 128, CY(ROWS-2), hints[sel], GRAY);
+// Returns a pointer to the cfg field for the given joy row (rows 1-7 only).
+static int *joy_btn_field(wbml_cfg *cfg, int sel) {
+    switch (sel) {
+    case 1: return &cfg->joy_btn_jump;
+    case 2: return &cfg->joy_btn_attack;
+    case 3: return &cfg->joy_btn_turbo;
+    case 4: return &cfg->joy_btn_left;
+    case 5: return &cfg->joy_btn_right;
+    case 6: return &cfg->joy_btn_up;
+    case 7: return &cfg->joy_btn_down;
+    default: return NULL;
     }
+}
+
+// Hint for joystick rows
+static void draw_joy_hint(SDL_Renderer *r, int sel, int detecting) {
+    // Erase the generic chrome hint drawn by draw_chrome before painting ours.
+    fill_rect(r, 0, CY(ROWS-2), 256, 8, (Col){8, 8, 48});
+    const char *s;
+    if (detecting)
+        s = (sel >= 4) ? "BTN/HAT  DEL:CLR  ESC:CANCEL"
+                       : "PRESS BTN  DEL:CLR  ESC:CANCEL";
+    else if (sel == 0)
+        s = "L/R:CHANGE DEVICE";
+    else
+        s = "ENTER:BIND BTN  DEL:CLR";
+    draw_str_c(r, 128, CY(ROWS-2), s, GRAY);
 }
 
 // ---------------------------------------------------------------------------
@@ -360,7 +392,7 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
         case MS_MAIN: draw_main(ren, sel); break;
         case MS_KEYS: draw_keys(ren, cfg, sel, rebinding); break;
         case MS_JOY:  draw_joy (ren, cfg, sel, detecting);
-                      if (!detecting) draw_joy_hint(ren, sel);
+                      draw_joy_hint(ren, sel, detecting);
                       break;
         }
         present(ren);
@@ -385,22 +417,31 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
 
             // --- Joystick detect mode ---
             if (detecting && screen == MS_JOY) {
-                if (e.type == SDL_KEYDOWN && e.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+                if (e.type == SDL_KEYDOWN) {
+                    SDL_Scancode sc = e.key.keysym.scancode;
+                    if (sc == SDL_SCANCODE_ESCAPE) { detecting = 0; continue; }
+                    if (sc == SDL_SCANCODE_DELETE || sc == SDL_SCANCODE_BACKSPACE) {
+                        int *f = joy_btn_field(cfg, sel);
+                        if (f) { *f = -1; cfg_save(cfg, cfg_path); }
+                        detecting = 0; continue;
+                    }
+                }
+                if (e.type == SDL_JOYBUTTONDOWN) {
+                    int *f = joy_btn_field(cfg, sel);
+                    if (f) { *f = e.jbutton.button; cfg_save(cfg, cfg_path); }
                     detecting = 0; continue;
                 }
-                if (sel == 1 && e.type == SDL_JOYBUTTONDOWN) {
-                    cfg->joy_btn_jump   = e.jbutton.button;
-                    cfg_save(cfg, cfg_path); detecting = 0; continue;
-                }
-                if (sel == 2 && e.type == SDL_JOYBUTTONDOWN) {
-                    cfg->joy_btn_attack = e.jbutton.button;
-                    cfg_save(cfg, cfg_path); detecting = 0; continue;
-                }
-                if ((sel == 3 || sel == 4) && e.type == SDL_JOYAXISMOTION) {
-                    if (e.jaxis.value > 16000 || e.jaxis.value < -16000) {
-                        if (sel == 3) cfg->joy_axis_x = e.jaxis.axis;
-                        else          cfg->joy_axis_y = e.jaxis.axis;
-                        cfg_save(cfg, cfg_path); detecting = 0; continue;
+                if (sel >= 4 && e.type == SDL_JOYHATMOTION &&
+                    e.jhat.value != SDL_HAT_CENTERED) {
+                    int enc = -1;
+                    if      (e.jhat.value & SDL_HAT_LEFT)  enc = -2;
+                    else if (e.jhat.value & SDL_HAT_RIGHT) enc = -3;
+                    else if (e.jhat.value & SDL_HAT_UP)    enc = -4;
+                    else if (e.jhat.value & SDL_HAT_DOWN)  enc = -5;
+                    if (enc != -1) {
+                        int *f = joy_btn_field(cfg, sel);
+                        if (f) { *f = enc; cfg_save(cfg, cfg_path); }
+                        detecting = 0; continue;
                     }
                 }
                 continue; // swallow other events while detecting

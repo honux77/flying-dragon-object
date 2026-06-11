@@ -8,6 +8,20 @@
 #include "cfg.h"
 #include "menu.h"
 
+// Read a direction-capable input: >= 0 = button, -2...-5 = hat (L/R/U/D), -1 = off.
+static int joy_dir(SDL_Joystick *joy, int v) {
+    if (v == -1) return 0;
+    if (v >= 0)  return SDL_JoystickGetButton(joy, v);
+    Uint8 hat = SDL_JoystickGetHat(joy, 0);
+    switch (v) {
+    case -2: return (hat & SDL_HAT_LEFT)  != 0;
+    case -3: return (hat & SDL_HAT_RIGHT) != 0;
+    case -4: return (hat & SDL_HAT_UP)    != 0;
+    case -5: return (hat & SDL_HAT_DOWN)  != 0;
+    default: return 0;
+    }
+}
+
 static void poll_input(system2 *m, const wbml_cfg *cfg, SDL_Joystick *joy) {
     static unsigned turbo_tick = 0;
     turbo_tick++;
@@ -28,14 +42,15 @@ static void poll_input(system2 *m, const wbml_cfg *cfg, SDL_Joystick *joy) {
     if (k[cfg->k_start1]) sys |= 0x10;
 
     if (joy) {
-        Sint16 ax = SDL_JoystickGetAxis(joy, cfg->joy_axis_x);
-        Sint16 ay = SDL_JoystickGetAxis(joy, cfg->joy_axis_y);
-        if (ax < -8000) p1 |= 0x80;
-        if (ax >  8000) p1 |= 0x40;
-        if (ay < -8000) p1 |= 0x20;
-        if (ay >  8000) p1 |= 0x10;
-        if (SDL_JoystickGetButton(joy, cfg->joy_btn_jump))   p1 |= 0x02;
-        if (SDL_JoystickGetButton(joy, cfg->joy_btn_attack)) p1 |= 0x04;
+        if (joy_dir(joy, cfg->joy_btn_left))  p1 |= 0x80;
+        if (joy_dir(joy, cfg->joy_btn_right)) p1 |= 0x40;
+        if (joy_dir(joy, cfg->joy_btn_up))    p1 |= 0x20;
+        if (joy_dir(joy, cfg->joy_btn_down))  p1 |= 0x10;
+        if (cfg->joy_btn_jump   >= 0 && SDL_JoystickGetButton(joy, cfg->joy_btn_jump))   p1 |= 0x02;
+        if (cfg->joy_btn_attack >= 0 && SDL_JoystickGetButton(joy, cfg->joy_btn_attack)) p1 |= 0x04;
+        if (cfg->joy_btn_turbo  >= 0 && SDL_JoystickGetButton(joy, cfg->joy_btn_turbo)) {
+            if ((turbo_tick >> 1) & 1) p1 |= 0x80; else p1 |= 0x40;
+        }
     }
 
     m->in.p1  = p1;
