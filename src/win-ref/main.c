@@ -69,10 +69,9 @@ int main(int argc, char **argv) {
     const char *romdir = (argc > 1) ? argv[1] : "roms";
 
     static system2 m;
-    if (machine_init(&m, romdir)) {
+    int rom_ok = !machine_init(&m, romdir);
+    if (!rom_ok)
         fprintf(stderr, "Place the ROM files listed above in '%s/' and retry.\n", romdir);
-        return 1;
-    }
 
     // optional sound-register logging for diagnostics: --snlog or SN_LOG=1
     {
@@ -144,7 +143,7 @@ int main(int argc, char **argv) {
             headless_frames = atoi(argv[i + 1]);
 
     if (!headless_frames) {
-        if (!run_menu(ren, &cfg, cfg_path)) {
+        if (!run_menu(ren, &cfg, cfg_path, rom_ok)) {
             SDL_DestroyTexture(tex);
             SDL_DestroyRenderer(ren);
             SDL_DestroyWindow(win);

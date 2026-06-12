@@ -245,14 +245,17 @@ static const char *main_items[] = {
 static const char *diff_names[] = { "EASY", "NORMAL", "HARD" };
 #define DIFF_N 3
 
-static void draw_main(SDL_Renderer *r, int sel, int difficulty, unsigned cheat_flags) {
+static void draw_main(SDL_Renderer *r, int sel, int difficulty, unsigned cheat_flags, int rom_ok) {
     draw_chrome(r, "Dragon Is a UFO!!");
+    if (!rom_ok)
+        draw_str_c(r, 128, CY(3), "ROM FILES MISSING", RED);
     int y0 = CY(4);
     for (int i = 0; i < MAIN_N; i++) {
         int y = y0 + i * 17;
         int is_sel = (i == sel);
-        Col c = is_sel ? YELLOW : WHITE;
-        if (is_sel) draw_str(r, CX(2), y, ">", YELLOW);
+        int disabled = (!rom_ok && i == MAIN_IDX_START);
+        Col c = disabled ? GRAY : (is_sel ? YELLOW : WHITE);
+        if (is_sel && !disabled) draw_str(r, CX(2), y, ">", YELLOW);
         draw_str(r, CX(4), y, main_items[i], c);
         if (i == MAIN_IDX_DIFF) {
             char buf[20];
@@ -496,7 +499,7 @@ static void draw_help(SDL_Renderer *r, const wbml_cfg *cfg) {
 // ---------------------------------------------------------------------------
 // Main menu entry point
 // ---------------------------------------------------------------------------
-int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
+int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path, int rom_ok) {
     open_all_joysticks();
 
     MenuScreen screen = MS_MAIN;
@@ -509,7 +512,7 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
     while (running) {
         // Render
         switch (screen) {
-        case MS_MAIN:  draw_main(ren, sel, cfg->difficulty, cfg->cheat_flags); break;
+        case MS_MAIN:  draw_main(ren, sel, cfg->difficulty, cfg->cheat_flags, rom_ok); break;
         case MS_KEYS: draw_keys(ren, cfg, sel, rebinding); break;
         case MS_JOY:   draw_joy (ren, cfg, sel, detecting);
                        draw_joy_hint(ren, sel, detecting);
@@ -615,7 +618,7 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
                         cfg->difficulty = (cfg->difficulty + 1) % DIFF_N;
                         cfg_save(cfg, cfg_path);
                         break;
-                    case MAIN_IDX_START: running = 0; result = 1; break;
+                    case MAIN_IDX_START: if (rom_ok) { running = 0; result = 1; } break;
                     case MAIN_IDX_QUIT:  running = 0; result = 0; break;
                     }
                 } else if (screen == MS_KEYS) {
