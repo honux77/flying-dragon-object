@@ -190,34 +190,34 @@ int main(int argc, char **argv) {
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) running = 0;
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_p) {
                 paused = !paused;
-                OSD_SHOW(paused ? "PAUSED" : "RESUMED");
+                OSD_SHOW(paused ? "일시정지" : "재개");
             }
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F8) {
                 cur_slot = (cur_slot + NUM_SLOTS - 1) % NUM_SLOTS;
-                snprintf(osd_msg, sizeof(osd_msg), "SLOT %d %s", cur_slot + 1,
-                         save_slots[cur_slot].valid ? "(SAVED)" : "(EMPTY)");
+                snprintf(osd_msg, sizeof(osd_msg), "슬롯 %d %s", cur_slot + 1,
+                         save_slots[cur_slot].valid ? "(저장됨)" : "(비어있음)");
                 osd_timer = 150;
             }
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F9) {
                 cur_slot = (cur_slot + 1) % NUM_SLOTS;
-                snprintf(osd_msg, sizeof(osd_msg), "SLOT %d %s", cur_slot + 1,
-                         save_slots[cur_slot].valid ? "(SAVED)" : "(EMPTY)");
+                snprintf(osd_msg, sizeof(osd_msg), "슬롯 %d %s", cur_slot + 1,
+                         save_slots[cur_slot].valid ? "(저장됨)" : "(비어있음)");
                 osd_timer = 150;
             }
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F6) {
                 machine_save(&m, &save_slots[cur_slot]);
-                snprintf(osd_msg, sizeof(osd_msg), "SLOT %d SAVED", cur_slot + 1);
+                snprintf(osd_msg, sizeof(osd_msg), "슬롯 %d 저장됨", cur_slot + 1);
                 osd_timer = 150;
                 printf("[save] slot %d saved at frame %ld\n", cur_slot + 1, frame);
             }
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F7) {
                 if (save_slots[cur_slot].valid) {
                     machine_load(&m, &save_slots[cur_slot]);
-                    snprintf(osd_msg, sizeof(osd_msg), "SLOT %d LOADED", cur_slot + 1);
+                    snprintf(osd_msg, sizeof(osd_msg), "슬롯 %d 불러옴", cur_slot + 1);
                     osd_timer = 150;
                     printf("[load] slot %d restored\n", cur_slot + 1);
                 } else {
-                    snprintf(osd_msg, sizeof(osd_msg), "SLOT %d EMPTY", cur_slot + 1);
+                    snprintf(osd_msg, sizeof(osd_msg), "슬롯 %d 비어있음", cur_slot + 1);
                     osd_timer = 150;
                 }
             }
@@ -235,7 +235,7 @@ int main(int argc, char **argv) {
                 if (surf) {
                     SDL_SaveBMP(surf, name);
                     SDL_FreeSurface(surf);
-                    OSD_SHOW("SCREENSHOT SAVED");
+                    OSD_SHOW("스크린샷 저장됨");
                     printf("screenshot: %s\n", name);
                 }
             }

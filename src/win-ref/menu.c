@@ -1,5 +1,7 @@
 // Config menu with embedded 8x8 bitmap font (public domain font8x8_basic)
+// Hangul rendered from font_kr.h (Galmuri9, OFL-1.1) via UTF-8 decoding.
 #include "menu.h"
+#include "font_kr.h"
 #include <SDL.h>
 #include <stdio.h>
 #include <string.h>
@@ -117,8 +119,11 @@ static const Col GRAY   = {128,128,128};
 static const Col CYAN   = {  0,220,255};
 static const Col RED    = {255, 80, 80};
 
+// Global text alpha — osd_draw sets this for fade-out, everything else uses 255.
+static Uint8 g_text_alpha = 255;
+
 static void set_color(SDL_Renderer *r, Col c) {
-    SDL_SetRenderDrawColor(r, c.r, c.g, c.b, 255);
+    SDL_SetRenderDrawColor(r, c.r, c.g, c.b, g_text_alpha);
 }
 
 static void draw_char(SDL_Renderer *r, int x, int y, unsigned char c, Col col) {
@@ -133,13 +138,63 @@ static void draw_char(SDL_Renderer *r, int x, int y, unsigned char c, Col col) {
     }
 }
 
+// Decode one UTF-8 sequence, advancing *ps. Invalid bytes yield '?'.
+static int utf8_next(const char **ps) {
+    const unsigned char *s = (const unsigned char *)*ps;
+    if (s[0] < 0x80)                         { *ps += 1; return s[0]; }
+    if ((s[0] & 0xE0) == 0xC0 && s[1])       { *ps += 2; return ((s[0] & 0x1F) << 6) | (s[1] & 0x3F); }
+    if ((s[0] & 0xF0) == 0xE0 && s[1] && s[2]) {
+        *ps += 3;
+        return ((s[0] & 0x0F) << 12) | ((s[1] & 0x3F) << 6) | (s[2] & 0x3F);
+    }
+    *ps += 1; return '?';
+}
+
+static int kfont_find(int cp) {
+    int lo = 0, hi = KFONT_N - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (g_kfont_cp[mid] == (uint16_t)cp) return mid;
+        if (g_kfont_cp[mid] < cp) lo = mid + 1; else hi = mid - 1;
+    }
+    return -1;
+}
+
+// Hangul glyph: 10px advance, 12 rows. y is the ASCII 8x8 cell top;
+// the Hangul cell starts 2px above so baselines line up.
+static void draw_kglyph(SDL_Renderer *r, int x, int y, int idx, Col col) {
+    set_color(r, col);
+    for (int row = 0; row < KFONT_ROWS; row++) {
+        uint16_t bits = g_kfont[idx][row];
+        for (int b = 0; b < 10; b++)
+            if (bits & (1 << b))
+                SDL_RenderDrawPoint(r, x + b, y - 2 + row);
+    }
+}
+
 static void draw_str(SDL_Renderer *r, int x, int y, const char *s, Col col) {
-    for (; *s; s++, x += 8) draw_char(r, x, y, (unsigned char)*s, col);
+    while (*s) {
+        int cp = utf8_next(&s);
+        if (cp < 0x80) { draw_char(r, x, y, (unsigned char)cp, col); x += 8; continue; }
+        int idx = kfont_find(cp);
+        if (idx >= 0) { draw_kglyph(r, x, y, idx, col); x += 10; }
+        else          { draw_char(r, x, y, '?', col);   x += 8;  }
+    }
+}
+
+// Pixel width of a UTF-8 string as draw_str will render it.
+static int str_pxwidth(const char *s) {
+    int w = 0;
+    while (*s) {
+        int cp = utf8_next(&s);
+        w += (cp < 0x80 || kfont_find(cp) < 0) ? 8 : 10;
+    }
+    return w;
 }
 
 // Draw text centred at cx (pixel coordinate)
 static void draw_str_c(SDL_Renderer *r, int cx, int y, const char *s, Col col) {
-    draw_str(r, cx - (int)(strlen(s) * 4), y, s, col);
+    draw_str(r, cx - str_pxwidth(s) / 2, y, s, col);
 }
 
 static void fill_rect(SDL_Renderer *r, int x, int y, int w, int h, Col col) {
@@ -161,8 +216,8 @@ typedef enum { MS_MAIN, MS_KEYS, MS_JOY, MS_CHEAT, MS_HELP } MenuScreen;
 
 // Action names for keyboard settings
 static const char *k_labels[] = {
-    "LEFT", "RIGHT", "UP", "DOWN",
-    "JUMP", "ATTACK", "TURBO", "COIN", "START1", "RESET"
+    "왼쪽", "오른쪽", "위", "아래",
+    "점프", "공격", "터보", "코인", "시작", "리셋"
 };
 static SDL_Scancode *k_fields(wbml_cfg *c, int i) {
     SDL_Scancode *arr[] = {
@@ -176,9 +231,9 @@ static SDL_Scancode *k_fields(wbml_cfg *c, int i) {
 
 // Joystick names for display
 static const char *joy_row_labels[] = {
-    "DEVICE", "JUMP BTN", "ATTACK BTN", "TURBO BTN",
-    "LEFT BTN", "RIGHT BTN", "UP BTN", "DOWN BTN",
-    "COIN BTN", "START BTN"
+    "장치", "점프 버튼", "공격 버튼", "터보 버튼",
+    "왼쪽 버튼", "오른쪽 버튼", "위 버튼", "아래 버튼",
+    "코인 버튼", "시작 버튼"
 };
 #define NUM_JOY_ROWS 10
 
@@ -212,28 +267,28 @@ static void draw_sep(SDL_Renderer *r, int row) {
 static void draw_chrome_hint(SDL_Renderer *r, const char *title, const char *hint) {
     SDL_SetRenderDrawColor(r, 8, 8, 48, 255);
     SDL_RenderClear(r);
-    fill_rect(r, 0, 0, 256, 10, (Col){0,0,80});
-    draw_str_c(r, 128, 1, title, YELLOW);
+    fill_rect(r, 0, 0, 256, 13, (Col){0,0,80});
+    draw_str_c(r, 128, 2, title, YELLOW);
     draw_sep(r, 2);
     draw_sep(r, ROWS - 3);
     draw_str_c(r, 128, CY(ROWS-2), hint, GRAY);
 }
 
 static void draw_chrome(SDL_Renderer *r, const char *title) {
-    draw_chrome_hint(r, title, "UP/DN:SELECT  ENTER:OK  ESC:BACK");
+    draw_chrome_hint(r, title, "상하:선택  ENTER:확인  ESC:뒤로");
 }
 
 // ---------------------------------------------------------------------------
 // MAIN MENU
 // ---------------------------------------------------------------------------
 static const char *main_items[] = {
-    "KEYBOARD SETTINGS",
-    "JOYSTICK SETTINGS",
-    "DIFFICULTY",
-    "CHEAT SETTINGS",
-    "HELP",
-    "START GAME",
-    "QUIT"
+    "키보드 설정",
+    "조이스틱 설정",
+    "난이도",
+    "치트 설정",
+    "도움말",
+    "게임 시작",
+    "종료"
 };
 #define MAIN_N         7
 #define MAIN_IDX_DIFF  2
@@ -242,13 +297,13 @@ static const char *main_items[] = {
 #define MAIN_IDX_START 5
 #define MAIN_IDX_QUIT  6
 
-static const char *diff_names[] = { "EASY", "NORMAL", "HARD" };
+static const char *diff_names[] = { "쉬움", "보통", "어려움" };
 #define DIFF_N 3
 
 static void draw_main(SDL_Renderer *r, int sel, int difficulty, unsigned cheat_flags, int rom_ok) {
-    draw_chrome(r, "Dragon Is a UFO!!");
+    draw_chrome(r, "드래곤은 UFO다!!");
     if (!rom_ok)
-        draw_str_c(r, 128, CY(3), "ROM FILES MISSING", RED);
+        draw_str_c(r, 128, CY(3), "롬 파일이 없습니다", RED);
     int y0 = CY(4);
     for (int i = 0; i < MAIN_N; i++) {
         int y = y0 + i * 17;
@@ -258,12 +313,12 @@ static void draw_main(SDL_Renderer *r, int sel, int difficulty, unsigned cheat_f
         if (is_sel && !disabled) draw_str(r, CX(2), y, ">", YELLOW);
         draw_str(r, CX(4), y, main_items[i], c);
         if (i == MAIN_IDX_DIFF) {
-            char buf[20];
-            snprintf(buf, sizeof(buf), "< %-6s >", diff_names[difficulty]);
+            char buf[24];
+            snprintf(buf, sizeof(buf), "< %s >", diff_names[difficulty]);
             draw_str(r, CX(16), y, buf, is_sel ? CYAN : GRAY);
         }
         if (i == MAIN_IDX_CHEAT) {
-            draw_str(r, CX(20), y, cheat_flags ? "ON" : "OFF", cheat_flags ? CYAN : GRAY);
+            draw_str(r, CX(20), y, cheat_flags ? "켜짐" : "꺼짐", cheat_flags ? CYAN : GRAY);
         }
     }
 }
@@ -272,17 +327,17 @@ static void draw_main(SDL_Renderer *r, int sel, int difficulty, unsigned cheat_f
 // CHEAT SETTINGS
 // ---------------------------------------------------------------------------
 static const struct { const char *label; unsigned flag; } cheat_items[] = {
-    { "FREEZE TIMER",  CHEAT_TIMER  },
-    { "LEGEND ARMOUR", CHEAT_ARMOUR },
-    { "LEGEND SHIELD", CHEAT_SHIELD },
-    { "LEGEND SWORD",  CHEAT_SWORD  },
-    { "LEGEND BOOTS",  CHEAT_BOOTS  },
-    { "RICH GAME",     CHEAT_COIN   },
+    { "타이머 정지",   CHEAT_TIMER  },
+    { "전설의 갑옷",   CHEAT_ARMOUR },
+    { "전설의 방패",   CHEAT_SHIELD },
+    { "전설의 검",     CHEAT_SWORD  },
+    { "전설의 부츠",   CHEAT_BOOTS  },
+    { "부자 게임",     CHEAT_COIN   },
 };
 #define CHEAT_N ((int)(sizeof(cheat_items)/sizeof(cheat_items[0])))
 
 static void draw_cheat(SDL_Renderer *r, int sel, unsigned flags) {
-    draw_chrome_hint(r, "CHEAT SETTINGS", "ENTER/SPACE:TOGGLE  ESC:BACK");
+    draw_chrome_hint(r, "치트 설정", "ENTER/SPACE:전환  ESC:뒤로");
     int y0 = CY(3);
     for (int i = 0; i < CHEAT_N; i++) {
         int y = y0 + i * 17;
@@ -296,14 +351,14 @@ static void draw_cheat(SDL_Renderer *r, int sel, unsigned flags) {
     int y_back = y0 + CHEAT_N * 17;
     Col bc = (sel == CHEAT_N) ? YELLOW : WHITE;
     if (sel == CHEAT_N) draw_str(r, CX(1), y_back, ">", YELLOW);
-    draw_str(r, CX(3), y_back, "BACK", bc);
+    draw_str(r, CX(3), y_back, "뒤로", bc);
 }
 
 // ---------------------------------------------------------------------------
 // KEYBOARD SETTINGS
 // ---------------------------------------------------------------------------
 static void draw_keys(SDL_Renderer *r, wbml_cfg *cfg, int sel, int rebinding) {
-    draw_chrome(r, "KEYBOARD SETTINGS");
+    draw_chrome(r, "키보드 설정");
     int y0 = CY(3);
     for (int i = 0; i < NUM_KEYS; i++) {
         int y = y0 + i * 17;
@@ -311,12 +366,10 @@ static void draw_keys(SDL_Renderer *r, wbml_cfg *cfg, int sel, int rebinding) {
         Col lc = is_sel ? YELLOW : WHITE;
         Col vc = is_sel ? CYAN   : GRAY;
         if (is_sel) draw_str(r, CX(1), y, ">", YELLOW);
-        char buf[32];
-        snprintf(buf, sizeof(buf), "%-8s", k_labels[i]);
-        draw_str(r, CX(2), y, buf, lc);
+        draw_str(r, CX(2), y, k_labels[i], lc);
         const char *kn = SDL_GetScancodeName(*k_fields(cfg, i));
         if (rebinding && is_sel)
-            draw_str(r, CX(13), y, "Press a key...", RED);
+            draw_str(r, CX(13), y, "키를 누르세요...", RED);
         else
             draw_str(r, CX(13), y, kn, vc);
     }
@@ -324,7 +377,7 @@ static void draw_keys(SDL_Renderer *r, wbml_cfg *cfg, int sel, int rebinding) {
     int y_back = y0 + NUM_KEYS * 17;
     Col bc = (sel == NUM_KEYS) ? YELLOW : WHITE;
     if (sel == NUM_KEYS) draw_str(r, CX(1), y_back, ">", YELLOW);
-    draw_str(r, CX(2), y_back, "BACK", bc);
+    draw_str(r, CX(2), y_back, "뒤로", bc);
 }
 
 // ---------------------------------------------------------------------------
@@ -332,12 +385,12 @@ static void draw_keys(SDL_Renderer *r, wbml_cfg *cfg, int sel, int rebinding) {
 // ---------------------------------------------------------------------------
 static void fmt_btn(char *buf, size_t n, int v) {
     switch (v) {
-    case -1: snprintf(buf, n, "---");       break;
-    case -2: snprintf(buf, n, "Hat LEFT");  break;
-    case -3: snprintf(buf, n, "Hat RIGHT"); break;
-    case -4: snprintf(buf, n, "Hat UP");    break;
-    case -5: snprintf(buf, n, "Hat DOWN");  break;
-    default: snprintf(buf, n, "Button %d", v); break;
+    case -1: snprintf(buf, n, "---");        break;
+    case -2: snprintf(buf, n, "햇 왼쪽");    break;
+    case -3: snprintf(buf, n, "햇 오른쪽");  break;
+    case -4: snprintf(buf, n, "햇 위");      break;
+    case -5: snprintf(buf, n, "햇 아래");    break;
+    default: snprintf(buf, n, "버튼 %d", v); break;
     }
 }
 
@@ -346,12 +399,10 @@ static void draw_joy_row(SDL_Renderer *r, wbml_cfg *cfg, int i, int y,
     Col lc = is_sel ? YELLOW : WHITE;
     Col vc = is_sel ? CYAN   : GRAY;
     if (is_sel) draw_str(r, CX(1), y, ">", YELLOW);
-    char lbuf[16];
-    snprintf(lbuf, sizeof(lbuf), "%-10s", joy_row_labels[i]);
-    draw_str(r, CX(2), y, lbuf, lc);
+    draw_str(r, CX(2), y, joy_row_labels[i], lc);
 
     if (detecting && is_sel) {
-        const char *msg = (i >= 4) ? "BTN/HAT(DEL=CLR)" : "PRESS BTN(DEL=CLR)";
+        const char *msg = (i >= 4) ? "버튼/햇 입력" : "버튼을 누르세요";
         draw_str(r, CX(13), y, msg, RED);
         return;
     }
@@ -360,7 +411,7 @@ static void draw_joy_row(SDL_Renderer *r, wbml_cfg *cfg, int i, int y,
     switch (i) {
     case 0:
         if (cfg->joy_index < 0) {
-            snprintf(vbuf, sizeof(vbuf), "DISABLED");
+            snprintf(vbuf, sizeof(vbuf), "사용 안 함");
         } else {
             const char *name = (cfg->joy_index < g_njoys && g_joys[cfg->joy_index])
                 ? SDL_JoystickName(g_joys[cfg->joy_index]) : "?";
@@ -382,12 +433,12 @@ static void draw_joy_row(SDL_Renderer *r, wbml_cfg *cfg, int i, int y,
 }
 
 static void draw_joy(SDL_Renderer *r, wbml_cfg *cfg, int sel, int detecting) {
-    draw_chrome(r, "JOYSTICK SETTINGS");
+    draw_chrome(r, "조이스틱 설정");
     if (g_njoys == 0)
-        draw_str_c(r, 128, CY(3), "No joystick detected", RED);
+        draw_str_c(r, 128, CY(3), "조이스틱이 없습니다", RED);
     else {
-        char info[32];
-        snprintf(info, sizeof(info), "%d joystick(s) found", g_njoys);
+        char info[40];
+        snprintf(info, sizeof(info), "조이스틱 %d개 발견", g_njoys);
         draw_str_c(r, 128, CY(3), info, GRAY);
     }
 
@@ -399,7 +450,7 @@ static void draw_joy(SDL_Renderer *r, wbml_cfg *cfg, int sel, int detecting) {
     int y_back = y0 + NUM_JOY_ROWS * 15;
     Col bc = (sel == NUM_JOY_ROWS) ? YELLOW : WHITE;
     if (sel == NUM_JOY_ROWS) draw_str(r, CX(1), y_back, ">", YELLOW);
-    draw_str(r, CX(2), y_back, "BACK", bc);
+    draw_str(r, CX(2), y_back, "뒤로", bc);
 }
 
 // Returns a pointer to the cfg field for the given joy row (rows 1-7 only).
@@ -421,15 +472,15 @@ static int *joy_btn_field(wbml_cfg *cfg, int sel) {
 // Hint for joystick rows
 static void draw_joy_hint(SDL_Renderer *r, int sel, int detecting) {
     // Erase the generic chrome hint drawn by draw_chrome before painting ours.
-    fill_rect(r, 0, CY(ROWS-2), 256, 8, (Col){8, 8, 48});
+    fill_rect(r, 0, CY(ROWS-2) - 2, 256, 12, (Col){8, 8, 48});
     const char *s;
     if (detecting)
-        s = (sel >= 4) ? "BTN/HAT  DEL:CLR  ESC:CANCEL"
-                       : "PRESS BTN  DEL:CLR  ESC:CANCEL";
+        s = (sel >= 4) ? "버튼/햇 입력  DEL:해제  ESC:취소"
+                       : "버튼 입력  DEL:해제  ESC:취소";
     else if (sel == 0)
-        s = "L/R:CHANGE DEVICE";
+        s = "좌우:장치 변경";
     else
-        s = "ENTER:BIND BTN  DEL:CLR";
+        s = "ENTER:버튼 지정  DEL:해제";
     draw_str_c(r, 128, CY(ROWS-2), s, GRAY);
 }
 
@@ -442,30 +493,19 @@ void osd_draw(SDL_Renderer *r, const char *msg, int timer, int max_timer) {
     // Fade out in the last 30 frames
     int alpha = (timer < 30) ? (timer * 255 / 30) : 255;
 
-    int len    = (int)strlen(msg);
-    int box_w  = len * 8 + 8;
+    int text_w = str_pxwidth(msg);
+    int box_w  = text_w + 8;
     int box_x  = (256 - box_w) / 2;
-    int box_y  = 224 - 18;
+    int box_y  = 224 - 20;
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, 0, 0, 0, (Uint8)(alpha * 3 / 4));
-    SDL_Rect bg = {box_x, box_y, box_w, 12};
+    SDL_Rect bg = {box_x, box_y, box_w, 16};
     SDL_RenderFillRect(r, &bg);
 
-    // Draw text pixel by pixel with alpha
-    Col col = {255, 220, 0};
-    for (int i = 0; i < len; i++) {
-        unsigned char c = (unsigned char)msg[i];
-        if (c < 0x20 || c > 0x7E) continue;
-        const uint8_t *g = g_font[c - 0x20];
-        SDL_SetRenderDrawColor(r, col.r, col.g, col.b, (Uint8)alpha);
-        for (int row = 0; row < 8; row++) {
-            uint8_t bits = g[row];
-            for (int bit = 0; bit < 8; bit++)
-                if (bits & (1 << bit))
-                    SDL_RenderDrawPoint(r, box_x + 4 + i * 8 + bit, box_y + 2 + row);
-        }
-    }
+    g_text_alpha = (Uint8)alpha;
+    draw_str(r, box_x + 4, box_y + 4, msg, (Col){255, 220, 0});
+    g_text_alpha = 255;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
 }
 
@@ -474,7 +514,7 @@ void osd_draw(SDL_Renderer *r, const char *msg, int timer, int max_timer) {
 // ---------------------------------------------------------------------------
 static void draw_help(SDL_Renderer *r, const wbml_cfg *cfg) {
     (void)cfg;
-    draw_chrome_hint(r, "HELP", "ESC:BACK");
+    draw_chrome_hint(r, "도움말", "ESC:뒤로");
 
     int y = CY(3);
     const int S = 15;  // row step
@@ -485,14 +525,14 @@ static void draw_help(SDL_Renderer *r, const wbml_cfg *cfg) {
     draw_str(r, CX(16), y, (val), CYAN); y += S;
 
     snprintf(buf, sizeof(buf), "%s", SDL_GetScancodeName(cfg->k_reset));
-    HELP_ROW("RESET",          buf);
-    HELP_ROW("PAUSE",          "P");
-    HELP_ROW("SAVE STATE",     "F6");
-    HELP_ROW("LOAD STATE",     "F7");
-    HELP_ROW("PREV SLOT",      "F8");
-    HELP_ROW("NEXT SLOT",      "F9");
-    HELP_ROW("SCREENSHOT",     "F12");
-    HELP_ROW("QUIT",           "ESC");
+    HELP_ROW("리셋",           buf);
+    HELP_ROW("일시정지",       "P");
+    HELP_ROW("상태 저장",      "F6");
+    HELP_ROW("상태 불러오기",  "F7");
+    HELP_ROW("이전 슬롯",      "F8");
+    HELP_ROW("다음 슬롯",      "F9");
+    HELP_ROW("스크린샷",       "F12");
+    HELP_ROW("종료",           "ESC");
 #undef HELP_ROW
 }
 
