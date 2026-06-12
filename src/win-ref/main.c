@@ -8,72 +8,6 @@
 #include "cfg.h"
 #include "menu.h"
 
-// ---------------------------------------------------------------------------
-// Map-pin system: press [ to drop a pin at the player's world position,
-// ] to remove the last pin.  Pins are saved to build/pins.txt and drawn
-// as yellow diamonds that track with the background scroll.
-// ---------------------------------------------------------------------------
-#define MAX_PINS 64
-typedef struct { int wx, wy; } MapPin;
-static MapPin g_pins[MAX_PINS];
-static int    g_pin_count = 0;
-
-static void pins_save(void) {
-    FILE *f = fopen("build/pins.txt", "w");
-    if (!f) return;
-    for (int i = 0; i < g_pin_count; i++)
-        fprintf(f, "%d %d\n", g_pins[i].wx, g_pins[i].wy);
-    fclose(f);
-}
-
-static void pins_load(void) {
-    FILE *f = fopen("build/pins.txt", "r");
-    if (!f) return;
-    g_pin_count = 0;
-    while (g_pin_count < MAX_PINS &&
-           fscanf(f, "%d %d", &g_pins[g_pin_count].wx, &g_pins[g_pin_count].wy) == 2)
-        g_pin_count++;
-    fclose(f);
-}
-
-// Returns current background x-scroll in fb-pixel units.
-static int bg_xscroll(const system2 *m) {
-    return ((m->videoram[0x7c0] | (m->videoram[0x7c1] << 8)) & 0x1ff) - 512 + 10;
-}
-
-static void pin_drop(system2 *m) {
-    if (g_pin_count >= MAX_PINS) return;
-    int S  = bg_xscroll(m);
-    int SY = m->videoram[0x7ba];
-    const uint8_t *sd = &m->spriteram[1 * 0x10];  // sprite 1 = player
-    int raw_x = (sd[2] | (sd[3] << 8)) & 0x1ff;
-    int fb_x  = raw_x + (m->flip ? -14 : 14) + 16;  // +16 to center on body
-    int fb_y  = (sd[0] + sd[1]) / 2;
-    g_pins[g_pin_count].wx = fb_x - S;   // scroll-relative fb units, no masking
-    g_pins[g_pin_count].wy = fb_y - SY;
-    g_pin_count++;
-    pins_save();
-}
-
-// Draw pins into the 256×224 disp buffer (after fb downsampling).
-static void pins_draw(uint32_t *disp_buf, const system2 *m) {
-    if (!g_pin_count) return;
-    int S  = bg_xscroll(m);
-    int SY = m->videoram[0x7ba];
-    for (int i = 0; i < g_pin_count; i++) {
-        int dx = (g_pins[i].wx + S) / 2;
-        int dy =  g_pins[i].wy + SY;
-        for (int r = -3; r <= 3; r++) {
-            int half = 3 - (r < 0 ? -r : r);
-            for (int c = -half; c <= half; c++) {
-                int px = dx + c, py = dy + r;
-                if (px >= 0 && px < 256 && py >= 0 && py < 224)
-                    disp_buf[py * 256 + px] = 0xFFFFCC00u;  // bright yellow
-            }
-        }
-    }
-}
-
 // Read a direction-capable input: >= 0 = button, -2...-5 = hat (L/R/U/D), -1 = off.
 static int joy_dir(SDL_Joystick *joy, int v) {
     if (v == -1) return 0;
@@ -239,7 +173,6 @@ int main(int argc, char **argv) {
     int  osd_timer   = 0;
 #define OSD_SHOW(s) do { SDL_strlcpy(osd_msg, (s), sizeof(osd_msg)); osd_timer = 150; } while(0)
 
-    pins_load();
 
     Uint64 freq = SDL_GetPerformanceFrequency();
     Uint64 prev = SDL_GetPerformanceCounter();
@@ -307,17 +240,6 @@ int main(int argc, char **argv) {
                     printf("screenshot: %s\n", name);
                 }
             }
-            // Map pins: [ to drop, ] to undo last
-            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_LEFTBRACKET) {
-                pin_drop(&m);
-                snprintf(osd_msg, sizeof(osd_msg), "PIN %d ADDED", g_pin_count);
-                osd_timer = 150;
-            }
-            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_RIGHTBRACKET) {
-                if (g_pin_count > 0) { g_pin_count--; pins_save(); }
-                snprintf(osd_msg, sizeof(osd_msg), g_pin_count ? "PIN %d REMOVED" : "ALL PINS CLEARED", g_pin_count);
-                osd_timer = 150;
-            }
             // RAM snapshot for address hunting: press 0 to dump C200-C2FF
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_0) {
                 char name[64];
@@ -356,7 +278,6 @@ int main(int argc, char **argv) {
                 uint32_t *dst = &disp[y * DISP_W];
                 for (int x = 0; x < DISP_W; x++) dst[x] = src[x * 2];
             }
-            pins_draw(disp, &m);
             SDL_UpdateTexture(tex, NULL, disp, DISP_W * sizeof(uint32_t));
         }
 
