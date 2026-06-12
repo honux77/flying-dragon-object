@@ -233,6 +233,12 @@ int main(int argc, char **argv) {
                 FILE *f = fopen(name, "wb");
                 if (f) { fwrite(m.ram, 1, sizeof(m.ram), f); fclose(f); }
                 printf("[ram] frame=%ld", frame);
+                // C000-C0FF: system/timer area
+                for (int i = 0; i < 0x100; i++) {
+                    if (i % 16 == 0) printf("\n  C%03X:", 0x000 + i);
+                    printf(" %02X", m.ram[0x000 + i]);
+                }
+                // C200-C2FF: player state area
                 for (int i = 0; i < 0x100; i++) {
                     if (i % 16 == 0) printf("\n  C%03X:", 0x200 + i);
                     printf(" %02X", m.ram[0x200 + i]);

@@ -433,17 +433,15 @@ void machine_set_difficulty(system2 *m, int difficulty) {
     m->in.swb = swb;
 }
 
-// RAM offsets (relative to m->ram, base address C000):
-//   C202 (offset 0x202): current HP hearts (initialised from DIP, max=C203=5).
-//   C201 (offset 0x201): HP sub-counter / animation state.
-//
-// Gold address: TBD — needs a live debugging session to confirm.
-//   Candidate range: C210-C220 (16-bit BCD or binary).
-//   To find it: run the game, collect a coin, diff the RAM snapshot.
-
-#define RAM_HP         0x202  // current HP (byte, 0..max)
-#define RAM_HP_MAX     0x203  // max HP     (byte, set to 5 at new game)
-// Gold is stored as decimal digits: hundreds@C21D, tens@C21C, units@C21B
+// RAM offsets — confirmed from MAME cheat file (cheats/wbml.xml):
+#define RAM_HP         0x202  // current HP
+#define RAM_HP_MAX     0x203  // max HP
+#define RAM_TIMER      0x344  // game timer (0 = freeze = no hourglass)
+#define RAM_SWORD      0x21A  // sword type: 1=Gradius 2=Broad 3=Great 4=Excalibur 5=Legend
+#define RAM_SHIELD     0x221  // shield: 0=none 7=Light 8=Knight 9=Hard 0xA=Legend
+#define RAM_ARMOUR     0x223  // armour: 0=none 0xB=Light 0xC=Knight 0xD=Heavy 0xE=Hard 0xF=Legend
+#define RAM_BOOTS      0x225  // boots:  0=none 0x10=Cloth 0x11=Leather 0x12=Ceramic 0x13=Legend
+// Gold stored as decimal digits: C21B=units C21C=tens C21D=hundreds C21F=? (MAME: Infinite Money @C21F=09)
 #define RAM_GOLD_UNITS 0x21B
 #define RAM_GOLD_TENS  0x21C
 #define RAM_GOLD_HUNDS 0x21D
@@ -461,16 +459,12 @@ static void write_gold(system2 *m, unsigned g) {
 }
 
 void machine_easy_tick(system2 *m) {
-    // --- Damage reduction: halve each HP loss ---
-    static uint8_t s_prev_hp = 0xFF;
-    uint8_t hp = m->ram[RAM_HP];
-    if (s_prev_hp != 0xFF && hp < s_prev_hp) {
-        unsigned loss    = s_prev_hp - hp;
-        unsigned reduced = (loss > 1) ? (loss + 1) / 2 : loss;  // ceil(loss/2)
-        m->ram[RAM_HP] = (uint8_t)(s_prev_hp - reduced);
-        hp = m->ram[RAM_HP];
-    }
-    s_prev_hp = hp;
+    // --- Freeze game timer (no hourglass penalty) ---
+    m->ram[RAM_TIMER] = 0;
+
+    // --- Max armour + shield (damage reduction via equipment) ---
+    if (m->ram[RAM_ARMOUR] < 0x0F) m->ram[RAM_ARMOUR] = 0x0F;  // Legend Armour
+    if (m->ram[RAM_SHIELD] < 0x0A) m->ram[RAM_SHIELD] = 0x0A;  // Legend Shield
 
     // --- Coin minimum: each pickup adds between 15 and 66 gold ---
     static unsigned s_prev_gold = 0;
