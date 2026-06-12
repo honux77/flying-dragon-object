@@ -8,3 +8,8 @@
 
 # copyrighted ROM material — never commit
 /roms/
+/roms-kr/
+/roms-wbmljb/
+
+# python cache
+__pycache__/

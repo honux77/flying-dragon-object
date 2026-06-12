@@ -218,16 +218,48 @@ static int load(const char *dir, const char *name, uint8_t *dst, unsigned off, u
     return 0;
 }
 
+// Does a ROM file exist in the given directory?
+static int rom_exists(const char *dir, const char *name) {
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s", dir, name);
+    FILE *f = fopen(path, "rb");
+    if (f) { fclose(f); return 1; }
+    return 0;
+}
+
+// Load one wbmljb bootleg program ROM: a 64KB file laid out as
+// <32KB opcode view> + <32KB data view> (pre-decrypted MC-8123).
+static int load_bootleg_rom(const char *dir, const char *name,
+                            uint8_t *opcodes, uint8_t *data, unsigned base) {
+    static uint8_t buf[0x10000];
+    if (load(dir, name, buf, 0, 0x10000)) return 1;
+    memcpy(opcodes + base, buf,          0x8000);
+    memcpy(data    + base, buf + 0x8000, 0x8000);
+    return 0;
+}
+
 int machine_init(system2 *m, const char *romdir) {
     memset(m, 0, sizeof(*m));
     int err = 0;
 
-    // main CPU ROMs (region layout per MAME wbml ROM_START)
+    // wbmljb bootleg set: unencrypted, opcode/data views shipped separately.
+    int bootleg = rom_exists(romdir, "wbml.01");
+
     memset(m->mainrom, 0xff, MAINROM_SIZE);
-    err |= load(romdir, "epr-11031a.90", m->mainrom, 0x00000, 0x8000);
-    err |= load(romdir, "epr-11032.91",  m->mainrom, 0x10000, 0x8000);
-    err |= load(romdir, "epr-11033.92",  m->mainrom, 0x18000, 0x8000);
-    err |= load(romdir, "317-0043.key",  m->key,     0x00000, 0x2000);
+    if (bootleg) {
+        printf("loading wbmljb (bootleg, unencrypted) set from %s/\n", romdir);
+        memset(m->opcodes, 0xff, MAINROM_SIZE);
+        memset(m->data,    0xff, MAINROM_SIZE);
+        err |= load_bootleg_rom(romdir, "wbml.01", m->opcodes, m->data, 0x00000);
+        err |= load_bootleg_rom(romdir, "m-6.bin", m->opcodes, m->data, 0x10000);
+        err |= load_bootleg_rom(romdir, "m-7.bin", m->opcodes, m->data, 0x18000);
+    } else {
+        // main CPU ROMs (region layout per MAME wbml ROM_START)
+        err |= load(romdir, "epr-11031a.90", m->mainrom, 0x00000, 0x8000);
+        err |= load(romdir, "epr-11032.91",  m->mainrom, 0x10000, 0x8000);
+        err |= load(romdir, "epr-11033.92",  m->mainrom, 0x18000, 0x8000);
+        err |= load(romdir, "317-0043.key",  m->key,     0x00000, 0x2000);
+    }
 
     err |= load(romdir, "epr-11037.126", m->soundrom, 0x0000, 0x8000);
 
@@ -246,8 +278,10 @@ int machine_init(system2 *m, const char *romdir) {
     err |= load(romdir, "pr5317.37",  m->lookup_prom, 0x0000, 0x0100);
     if (err) return err;
 
-    // MC-8123 decode the whole main region into opcode/data views
-    mc8123_decode(m->mainrom, m->key, m->opcodes, m->data, MAINROM_SIZE);
+    // MC-8123 decode the whole main region into opcode/data views.
+    // The bootleg set already ships pre-decoded views, so skip it there.
+    if (!bootleg)
+        mc8123_decode(m->mainrom, m->key, m->opcodes, m->data, MAINROM_SIZE);
 
     // DIP switches default position (all 1 = MAME default / off)
     m->in.swa = 0xff;
