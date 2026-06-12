@@ -13,6 +13,9 @@ void cfg_defaults(wbml_cfg *c) {
     c->k_turbo  = SDL_SCANCODE_C;
     c->k_coin   = SDL_SCANCODE_5;
     c->k_start1 = SDL_SCANCODE_1;
+    c->k_reset  = SDL_SCANCODE_F5;
+    c->difficulty   = 1;  // NORMAL
+    c->cheat_flags  = 0;
     c->joy_index      = -1;
     c->joy_btn_jump   = 0;
     c->joy_btn_attack = 1;
@@ -21,6 +24,8 @@ void cfg_defaults(wbml_cfg *c) {
     c->joy_btn_right  = -1;
     c->joy_btn_up     = -1;
     c->joy_btn_down   = -1;
+    c->joy_btn_coin   = -1;
+    c->joy_btn_start  = -1;
 }
 
 int cfg_load(wbml_cfg *c, const char *path) {
@@ -33,9 +38,11 @@ int cfg_load(wbml_cfg *c, const char *path) {
         if (!strcmp(key, #field)) { if (sc != SDL_SCANCODE_UNKNOWN) c->field = sc; } else
         TRY_SC(k_left) TRY_SC(k_right) TRY_SC(k_up) TRY_SC(k_down)
         TRY_SC(k_jump) TRY_SC(k_attack) TRY_SC(k_turbo)
-        TRY_SC(k_coin) TRY_SC(k_start1)
+        TRY_SC(k_coin) TRY_SC(k_start1) TRY_SC(k_reset)
 #undef TRY_SC
-        if      (!strcmp(key, "joy_index"))      c->joy_index      = atoi(val);
+        if      (!strcmp(key, "difficulty"))     c->difficulty     = atoi(val);
+        else if (!strcmp(key, "cheat_flags"))   c->cheat_flags    = (unsigned)atoi(val);
+        else if (!strcmp(key, "joy_index"))      c->joy_index      = atoi(val);
         else if (!strcmp(key, "joy_btn_jump"))   c->joy_btn_jump   = atoi(val);
         else if (!strcmp(key, "joy_btn_attack")) c->joy_btn_attack = atoi(val);
         else if (!strcmp(key, "joy_btn_turbo"))  c->joy_btn_turbo  = atoi(val);
@@ -43,6 +50,8 @@ int cfg_load(wbml_cfg *c, const char *path) {
         else if (!strcmp(key, "joy_btn_right"))  c->joy_btn_right  = atoi(val);
         else if (!strcmp(key, "joy_btn_up"))     c->joy_btn_up     = atoi(val);
         else if (!strcmp(key, "joy_btn_down"))   c->joy_btn_down   = atoi(val);
+        else if (!strcmp(key, "joy_btn_coin"))   c->joy_btn_coin   = atoi(val);
+        else if (!strcmp(key, "joy_btn_start"))  c->joy_btn_start  = atoi(val);
     }
     fclose(f);
     return 1;
@@ -54,14 +63,18 @@ void cfg_save(const wbml_cfg *c, const char *path) {
     fprintf(f, "k_left=%s\nk_right=%s\nk_up=%s\nk_down=%s\n",
             SDL_GetScancodeName(c->k_left),  SDL_GetScancodeName(c->k_right),
             SDL_GetScancodeName(c->k_up),    SDL_GetScancodeName(c->k_down));
-    fprintf(f, "k_jump=%s\nk_attack=%s\nk_turbo=%s\nk_coin=%s\nk_start1=%s\n",
-            SDL_GetScancodeName(c->k_jump),  SDL_GetScancodeName(c->k_attack),
-            SDL_GetScancodeName(c->k_turbo), SDL_GetScancodeName(c->k_coin),
-            SDL_GetScancodeName(c->k_start1));
+    fprintf(f, "k_jump=%s\nk_attack=%s\nk_turbo=%s\nk_coin=%s\nk_start1=%s\nk_reset=%s\n",
+            SDL_GetScancodeName(c->k_jump),   SDL_GetScancodeName(c->k_attack),
+            SDL_GetScancodeName(c->k_turbo),  SDL_GetScancodeName(c->k_coin),
+            SDL_GetScancodeName(c->k_start1), SDL_GetScancodeName(c->k_reset));
+    fprintf(f, "difficulty=%d\n", c->difficulty);
+    fprintf(f, "cheat_flags=%u\n", c->cheat_flags);
     fprintf(f, "joy_index=%d\n", c->joy_index);
     fprintf(f, "joy_btn_jump=%d\njoy_btn_attack=%d\njoy_btn_turbo=%d\n",
             c->joy_btn_jump, c->joy_btn_attack, c->joy_btn_turbo);
     fprintf(f, "joy_btn_left=%d\njoy_btn_right=%d\njoy_btn_up=%d\njoy_btn_down=%d\n",
             c->joy_btn_left, c->joy_btn_right, c->joy_btn_up, c->joy_btn_down);
+    fprintf(f, "joy_btn_coin=%d\njoy_btn_start=%d\n",
+            c->joy_btn_coin, c->joy_btn_start);
     fclose(f);
 }

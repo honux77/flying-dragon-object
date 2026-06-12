@@ -14,7 +14,7 @@ LIBS    := -lmingw32 -lSDL2main -lSDL2
 SRC := main.c machine.c mc8123.c video.c sn76489.c cfg.c menu.c z80/z80.c
 OBJ := $(SRC:.c=.o)
 
-EXE := $(BUILD)/wbml-ref.exe
+EXE := $(BUILD)/flydo.exe
 
 all: $(EXE)
 

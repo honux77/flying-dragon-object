@@ -157,29 +157,30 @@ static void fill_rect(SDL_Renderer *r, int x, int y, int w, int h, Col col) {
 // ---------------------------------------------------------------------------
 // Menu state machine
 // ---------------------------------------------------------------------------
-typedef enum { MS_MAIN, MS_KEYS, MS_JOY } MenuScreen;
+typedef enum { MS_MAIN, MS_KEYS, MS_JOY, MS_CHEAT, MS_HELP } MenuScreen;
 
 // Action names for keyboard settings
 static const char *k_labels[] = {
     "LEFT", "RIGHT", "UP", "DOWN",
-    "JUMP", "ATTACK", "TURBO", "COIN", "START1"
+    "JUMP", "ATTACK", "TURBO", "COIN", "START1", "RESET"
 };
 static SDL_Scancode *k_fields(wbml_cfg *c, int i) {
     SDL_Scancode *arr[] = {
         &c->k_left, &c->k_right, &c->k_up, &c->k_down,
         &c->k_jump, &c->k_attack, &c->k_turbo,
-        &c->k_coin, &c->k_start1
+        &c->k_coin, &c->k_start1, &c->k_reset
     };
     return arr[i];
 }
-#define NUM_KEYS 9
+#define NUM_KEYS 10
 
 // Joystick names for display
 static const char *joy_row_labels[] = {
     "DEVICE", "JUMP BTN", "ATTACK BTN", "TURBO BTN",
-    "LEFT BTN", "RIGHT BTN", "UP BTN", "DOWN BTN"
+    "LEFT BTN", "RIGHT BTN", "UP BTN", "DOWN BTN",
+    "COIN BTN", "START BTN"
 };
-#define NUM_JOY_ROWS 8
+#define NUM_JOY_ROWS 10
 
 // Open all connected joysticks for event detection
 static SDL_Joystick *g_joys[16];
@@ -208,17 +209,18 @@ static void draw_sep(SDL_Renderer *r, int row) {
 }
 
 // Draw header + footer chrome shared by all screens
-static void draw_chrome(SDL_Renderer *r, const char *title) {
-    // background
+static void draw_chrome_hint(SDL_Renderer *r, const char *title, const char *hint) {
     SDL_SetRenderDrawColor(r, 8, 8, 48, 255);
     SDL_RenderClear(r);
-    // title bar
     fill_rect(r, 0, 0, 256, 10, (Col){0,0,80});
     draw_str_c(r, 128, 1, title, YELLOW);
     draw_sep(r, 2);
-    // footer
     draw_sep(r, ROWS - 3);
-    draw_str_c(r, 128, CY(ROWS-2), "UP/DN:SELECT  ENTER:OK  ESC:BACK", GRAY);
+    draw_str_c(r, 128, CY(ROWS-2), hint, GRAY);
+}
+
+static void draw_chrome(SDL_Renderer *r, const char *title) {
+    draw_chrome_hint(r, title, "UP/DN:SELECT  ENTER:OK  ESC:BACK");
 }
 
 // ---------------------------------------------------------------------------
@@ -227,20 +229,71 @@ static void draw_chrome(SDL_Renderer *r, const char *title) {
 static const char *main_items[] = {
     "KEYBOARD SETTINGS",
     "JOYSTICK SETTINGS",
+    "DIFFICULTY",
+    "CHEAT SETTINGS",
+    "HELP",
     "START GAME",
     "QUIT"
 };
-#define MAIN_N 4
+#define MAIN_N         7
+#define MAIN_IDX_DIFF  2
+#define MAIN_IDX_CHEAT 3
+#define MAIN_IDX_HELP  4
+#define MAIN_IDX_START 5
+#define MAIN_IDX_QUIT  6
 
-static void draw_main(SDL_Renderer *r, int sel) {
-    draw_chrome(r, "WONDER BOY: MONSTER LAND");
-    int y0 = CY(5);
+static const char *diff_names[] = { "EASY", "NORMAL", "HARD" };
+#define DIFF_N 3
+
+static void draw_main(SDL_Renderer *r, int sel, int difficulty, unsigned cheat_flags) {
+    draw_chrome(r, "Dragon Is a UFO!!");
+    int y0 = CY(4);
     for (int i = 0; i < MAIN_N; i++) {
-        int y = y0 + i * 18;
-        Col c = (i == sel) ? YELLOW : WHITE;
-        if (i == sel) draw_str(r, CX(2), y, ">", YELLOW);
+        int y = y0 + i * 17;
+        int is_sel = (i == sel);
+        Col c = is_sel ? YELLOW : WHITE;
+        if (is_sel) draw_str(r, CX(2), y, ">", YELLOW);
         draw_str(r, CX(4), y, main_items[i], c);
+        if (i == MAIN_IDX_DIFF) {
+            char buf[20];
+            snprintf(buf, sizeof(buf), "< %-6s >", diff_names[difficulty]);
+            draw_str(r, CX(16), y, buf, is_sel ? CYAN : GRAY);
+        }
+        if (i == MAIN_IDX_CHEAT) {
+            draw_str(r, CX(20), y, cheat_flags ? "ON" : "OFF", cheat_flags ? CYAN : GRAY);
+        }
     }
+}
+
+// ---------------------------------------------------------------------------
+// CHEAT SETTINGS
+// ---------------------------------------------------------------------------
+static const struct { const char *label; unsigned flag; } cheat_items[] = {
+    { "FREEZE TIMER",  CHEAT_TIMER  },
+    { "LEGEND ARMOUR", CHEAT_ARMOUR },
+    { "LEGEND SHIELD", CHEAT_SHIELD },
+    { "LEGEND SWORD",  CHEAT_SWORD  },
+    { "LEGEND BOOTS",  CHEAT_BOOTS  },
+    { "RICH GAME",     CHEAT_COIN   },
+};
+#define CHEAT_N ((int)(sizeof(cheat_items)/sizeof(cheat_items[0])))
+
+static void draw_cheat(SDL_Renderer *r, int sel, unsigned flags) {
+    draw_chrome_hint(r, "CHEAT SETTINGS", "ENTER/SPACE:TOGGLE  ESC:BACK");
+    int y0 = CY(3);
+    for (int i = 0; i < CHEAT_N; i++) {
+        int y = y0 + i * 17;
+        int is_sel = (i == sel);
+        int on = (flags & cheat_items[i].flag) != 0;
+        Col c = is_sel ? YELLOW : WHITE;
+        if (is_sel) draw_str(r, CX(1), y, ">", YELLOW);
+        draw_str(r, CX(3), y, on ? "[X]" : "[ ]", on ? CYAN : GRAY);
+        draw_str(r, CX(7), y, cheat_items[i].label, c);
+    }
+    int y_back = y0 + CHEAT_N * 17;
+    Col bc = (sel == CHEAT_N) ? YELLOW : WHITE;
+    if (sel == CHEAT_N) draw_str(r, CX(1), y_back, ">", YELLOW);
+    draw_str(r, CX(3), y_back, "BACK", bc);
 }
 
 // ---------------------------------------------------------------------------
@@ -318,6 +371,8 @@ static void draw_joy_row(SDL_Renderer *r, wbml_cfg *cfg, int i, int y,
     case 5: fmt_btn(vbuf, sizeof(vbuf), cfg->joy_btn_right);  break;
     case 6: fmt_btn(vbuf, sizeof(vbuf), cfg->joy_btn_up);     break;
     case 7: fmt_btn(vbuf, sizeof(vbuf), cfg->joy_btn_down);   break;
+    case 8: fmt_btn(vbuf, sizeof(vbuf), cfg->joy_btn_coin);   break;
+    case 9: fmt_btn(vbuf, sizeof(vbuf), cfg->joy_btn_start);  break;
     default: snprintf(vbuf, sizeof(vbuf), "?"); break;
     }
     draw_str(r, CX(13), y, vbuf, vc);
@@ -333,12 +388,12 @@ static void draw_joy(SDL_Renderer *r, wbml_cfg *cfg, int sel, int detecting) {
         draw_str_c(r, 128, CY(3), info, GRAY);
     }
 
-    int y0 = CY(5);
+    int y0 = CY(3);
     for (int i = 0; i < NUM_JOY_ROWS; i++)
-        draw_joy_row(r, cfg, i, y0 + i * 17, i == sel, detecting);
+        draw_joy_row(r, cfg, i, y0 + i * 15, i == sel, detecting);
 
     // BACK
-    int y_back = y0 + NUM_JOY_ROWS * 17;
+    int y_back = y0 + NUM_JOY_ROWS * 15;
     Col bc = (sel == NUM_JOY_ROWS) ? YELLOW : WHITE;
     if (sel == NUM_JOY_ROWS) draw_str(r, CX(1), y_back, ">", YELLOW);
     draw_str(r, CX(2), y_back, "BACK", bc);
@@ -354,6 +409,8 @@ static int *joy_btn_field(wbml_cfg *cfg, int sel) {
     case 5: return &cfg->joy_btn_right;
     case 6: return &cfg->joy_btn_up;
     case 7: return &cfg->joy_btn_down;
+    case 8: return &cfg->joy_btn_coin;
+    case 9: return &cfg->joy_btn_start;
     default: return NULL;
     }
 }
@@ -374,6 +431,69 @@ static void draw_joy_hint(SDL_Renderer *r, int sel, int detecting) {
 }
 
 // ---------------------------------------------------------------------------
+// OSD (on-screen display) overlay — call after SDL_RenderCopy of game texture
+// ---------------------------------------------------------------------------
+void osd_draw(SDL_Renderer *r, const char *msg, int timer, int max_timer) {
+    (void)max_timer;
+    if (timer <= 0 || !msg || !msg[0]) return;
+    // Fade out in the last 30 frames
+    int alpha = (timer < 30) ? (timer * 255 / 30) : 255;
+
+    int len    = (int)strlen(msg);
+    int box_w  = len * 8 + 8;
+    int box_x  = (256 - box_w) / 2;
+    int box_y  = 224 - 18;
+
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r, 0, 0, 0, (Uint8)(alpha * 3 / 4));
+    SDL_Rect bg = {box_x, box_y, box_w, 12};
+    SDL_RenderFillRect(r, &bg);
+
+    // Draw text pixel by pixel with alpha
+    Col col = {255, 220, 0};
+    for (int i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)msg[i];
+        if (c < 0x20 || c > 0x7E) continue;
+        const uint8_t *g = g_font[c - 0x20];
+        SDL_SetRenderDrawColor(r, col.r, col.g, col.b, (Uint8)alpha);
+        for (int row = 0; row < 8; row++) {
+            uint8_t bits = g[row];
+            for (int bit = 0; bit < 8; bit++)
+                if (bits & (1 << bit))
+                    SDL_RenderDrawPoint(r, box_x + 4 + i * 8 + bit, box_y + 2 + row);
+        }
+    }
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+}
+
+// ---------------------------------------------------------------------------
+// HELP screen
+// ---------------------------------------------------------------------------
+static void draw_help(SDL_Renderer *r, const wbml_cfg *cfg) {
+    (void)cfg;
+    draw_chrome_hint(r, "HELP", "ESC:BACK");
+
+    int y = CY(3);
+    const int S = 15;  // row step
+
+    char buf[32];
+#define HELP_ROW(label, val) \
+    draw_str(r, CX(2), y, (label), WHITE); \
+    draw_str(r, CX(16), y, (val), CYAN); y += S;
+
+    snprintf(buf, sizeof(buf), "%s", SDL_GetScancodeName(cfg->k_reset));
+    HELP_ROW("RESET",          buf);
+    HELP_ROW("PAUSE",          "P");
+    HELP_ROW("SAVE STATE",     "F6");
+    HELP_ROW("LOAD STATE",     "F7");
+    HELP_ROW("PREV SLOT",      "F8");
+    HELP_ROW("NEXT SLOT",      "F9");
+    HELP_ROW("SCREENSHOT",     "F12");
+    HELP_ROW("QUIT",           "ESC");
+#undef HELP_ROW
+}
+
+// ---------------------------------------------------------------------------
 // Main menu entry point
 // ---------------------------------------------------------------------------
 int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
@@ -389,11 +509,13 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
     while (running) {
         // Render
         switch (screen) {
-        case MS_MAIN: draw_main(ren, sel); break;
+        case MS_MAIN:  draw_main(ren, sel, cfg->difficulty, cfg->cheat_flags); break;
         case MS_KEYS: draw_keys(ren, cfg, sel, rebinding); break;
-        case MS_JOY:  draw_joy (ren, cfg, sel, detecting);
-                      draw_joy_hint(ren, sel, detecting);
-                      break;
+        case MS_JOY:   draw_joy (ren, cfg, sel, detecting);
+                       draw_joy_hint(ren, sel, detecting);
+                       break;
+        case MS_CHEAT: draw_cheat(ren, sel, cfg->cheat_flags); break;
+        case MS_HELP:  draw_help(ren, cfg); break;
         }
         present(ren);
 
@@ -451,25 +573,50 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
             if (e.type != SDL_KEYDOWN) continue;
             SDL_Scancode sc = e.key.keysym.scancode;
 
-            int max_sel = (screen == MS_MAIN) ? MAIN_N - 1
-                        : (screen == MS_KEYS) ? NUM_KEYS
-                        :                       NUM_JOY_ROWS;
+            int max_sel = (screen == MS_MAIN)  ? MAIN_N - 1
+                        : (screen == MS_KEYS)  ? NUM_KEYS
+                        : (screen == MS_CHEAT) ? CHEAT_N
+                        : (screen == MS_HELP)  ? 0
+                        :                        NUM_JOY_ROWS;
 
             if (sc == SDL_SCANCODE_UP)   { sel = (sel > 0) ? sel - 1 : max_sel; continue; }
             if (sc == SDL_SCANCODE_DOWN) { sel = (sel < max_sel) ? sel + 1 : 0; continue; }
 
             if (sc == SDL_SCANCODE_ESCAPE) {
-                if (screen != MS_MAIN) { screen = MS_MAIN; sel = 0; }
+                if (screen == MS_CHEAT) { screen = MS_MAIN; sel = MAIN_IDX_CHEAT; }
+                else if (screen == MS_HELP)  { screen = MS_MAIN; sel = MAIN_IDX_HELP; }
+                else if (screen != MS_MAIN)  { screen = MS_MAIN; sel = 0; }
                 continue;
             }
 
-            if (sc == SDL_SCANCODE_RETURN || sc == SDL_SCANCODE_KP_ENTER) {
+            // Difficulty row: L/R to change
+            if (screen == MS_MAIN && sel == MAIN_IDX_DIFF) {
+                if (sc == SDL_SCANCODE_LEFT) {
+                    cfg->difficulty = (cfg->difficulty + DIFF_N - 1) % DIFF_N;
+                    cfg_save(cfg, cfg_path);
+                    continue;
+                }
+                if (sc == SDL_SCANCODE_RIGHT) {
+                    cfg->difficulty = (cfg->difficulty + 1) % DIFF_N;
+                    cfg_save(cfg, cfg_path);
+                    continue;
+                }
+            }
+
+            if (sc == SDL_SCANCODE_RETURN || sc == SDL_SCANCODE_KP_ENTER ||
+                sc == SDL_SCANCODE_SPACE) {
                 if (screen == MS_MAIN) {
                     switch (sel) {
-                    case 0: screen = MS_KEYS; sel = 0; break;
-                    case 1: screen = MS_JOY;  sel = 0; break;
-                    case 2: running = 0; result = 1; break;
-                    case 3: running = 0; result = 0; break;
+                    case 0:              screen = MS_KEYS;  sel = 0; break;
+                    case 1:              screen = MS_JOY;   sel = 0; break;
+                    case MAIN_IDX_CHEAT: screen = MS_CHEAT; sel = 0; break;
+                    case MAIN_IDX_HELP:  screen = MS_HELP;  sel = 0; break;
+                    case MAIN_IDX_DIFF:
+                        cfg->difficulty = (cfg->difficulty + 1) % DIFF_N;
+                        cfg_save(cfg, cfg_path);
+                        break;
+                    case MAIN_IDX_START: running = 0; result = 1; break;
+                    case MAIN_IDX_QUIT:  running = 0; result = 0; break;
                     }
                 } else if (screen == MS_KEYS) {
                     if (sel == NUM_KEYS) { screen = MS_MAIN; sel = 0; }
@@ -478,6 +625,14 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
                     if (sel == NUM_JOY_ROWS) { screen = MS_MAIN; sel = 0; }
                     else if (sel == 0) { /* handled by L/R below */ }
                     else               { detecting = 1; }
+                } else if (screen == MS_HELP) {
+                    screen = MS_MAIN; sel = MAIN_IDX_HELP;
+                } else if (screen == MS_CHEAT) {
+                    if (sel == CHEAT_N) { screen = MS_MAIN; sel = MAIN_IDX_CHEAT; }
+                    else {
+                        cfg->cheat_flags ^= cheat_items[sel].flag;
+                        cfg_save(cfg, cfg_path);
+                    }
                 }
                 continue;
             }

@@ -67,8 +67,38 @@ typedef struct {
     sys_inputs in;
 } system2;
 
+// Save-state slot: covers all mutable RAM regions.
+typedef struct {
+    uint8_t ram[0x1000];
+    uint8_t spriteram[0x800];
+    uint8_t paletteram[0x800];
+    uint8_t soundram[0x800];
+    int     bank1;
+    int     videoram_bank;
+    int     video_mode;
+    int     flip;
+    uint8_t soundlatch;
+    uint8_t ppi_portc;
+    int     valid;  // 0 = empty slot
+} savestate;
+
 // Returns 0 on success, non-zero if a ROM file is missing.
 int machine_init(system2 *m, const char *romdir);
+
+// Soft-reset: re-initialises CPUs and clears RAM without reloading ROMs.
+void machine_reset(system2 *m);
+
+// Save/load state into a caller-supplied savestate struct.
+void machine_save(const system2 *m, savestate *s);
+void machine_load(system2 *m, const savestate *s);
+
+// Set DIP switches for the requested difficulty (0=EASY 1=NORMAL 2=HARD).
+// Call after machine_init() and after machine_reset().
+void machine_set_difficulty(system2 *m, int difficulty);
+
+// Per-frame cheat patches (MAME-cheat style RAM writes).
+// Pass cfg.cheat_flags; call every frame (flags==0 is a no-op).
+void machine_cheat_tick(system2 *m, unsigned cheat_flags);
 
 // Run one ~1/60s video frame: executes main + sound CPU cycles (interleaved)
 // and fires the VBLANK / sound interrupts, renders into the framebuffer, and
