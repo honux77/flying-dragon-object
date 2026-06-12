@@ -9,6 +9,7 @@ typedef struct {
     int joy_index;      // -1 = disabled
     int joy_btn_jump, joy_btn_attack, joy_btn_turbo;
     int joy_btn_left, joy_btn_right, joy_btn_up, joy_btn_down;
+    int joy_btn_coin, joy_btn_start;
     int difficulty;
     unsigned cheat_flags;
 } wbml_cfg;

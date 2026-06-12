@@ -51,6 +51,8 @@ static void poll_input(system2 *m, const wbml_cfg *cfg, SDL_Joystick *joy) {
         if (cfg->joy_btn_turbo  >= 0 && SDL_JoystickGetButton(joy, cfg->joy_btn_turbo)) {
             if ((turbo_tick >> 1) & 1) p1 |= 0x80; else p1 |= 0x40;
         }
+        if (cfg->joy_btn_coin  >= 0 && SDL_JoystickGetButton(joy, cfg->joy_btn_coin))  sys |= 0x01;
+        if (cfg->joy_btn_start >= 0 && SDL_JoystickGetButton(joy, cfg->joy_btn_start)) sys |= 0x10;
     }
 
     m->in.p1  = p1;

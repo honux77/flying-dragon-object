@@ -24,6 +24,8 @@ void cfg_defaults(wbml_cfg *c) {
     c->joy_btn_right  = -1;
     c->joy_btn_up     = -1;
     c->joy_btn_down   = -1;
+    c->joy_btn_coin   = -1;
+    c->joy_btn_start  = -1;
 }
 
 int cfg_load(wbml_cfg *c, const char *path) {
@@ -48,6 +50,8 @@ int cfg_load(wbml_cfg *c, const char *path) {
         else if (!strcmp(key, "joy_btn_right"))  c->joy_btn_right  = atoi(val);
         else if (!strcmp(key, "joy_btn_up"))     c->joy_btn_up     = atoi(val);
         else if (!strcmp(key, "joy_btn_down"))   c->joy_btn_down   = atoi(val);
+        else if (!strcmp(key, "joy_btn_coin"))   c->joy_btn_coin   = atoi(val);
+        else if (!strcmp(key, "joy_btn_start"))  c->joy_btn_start  = atoi(val);
     }
     fclose(f);
     return 1;
@@ -70,5 +74,7 @@ void cfg_save(const wbml_cfg *c, const char *path) {
             c->joy_btn_jump, c->joy_btn_attack, c->joy_btn_turbo);
     fprintf(f, "joy_btn_left=%d\njoy_btn_right=%d\njoy_btn_up=%d\njoy_btn_down=%d\n",
             c->joy_btn_left, c->joy_btn_right, c->joy_btn_up, c->joy_btn_down);
+    fprintf(f, "joy_btn_coin=%d\njoy_btn_start=%d\n",
+            c->joy_btn_coin, c->joy_btn_start);
     fclose(f);
 }
