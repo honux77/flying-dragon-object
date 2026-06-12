@@ -299,6 +299,12 @@ int main(int argc, char **argv) {
                 fclose(f);
                 printf("headless: wrote build/headless.ppm after %ld frames\n", frame);
             }
+            f = fopen("build/vram.bin", "wb");
+            if (f) {
+                fwrite(m.videoram, 1, VIDEORAM_SIZE, f);
+                fclose(f);
+                printf("headless: wrote build/vram.bin\n");
+            }
             running = 0;
         }
 
