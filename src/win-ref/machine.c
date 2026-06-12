@@ -1,5 +1,6 @@
 // wbml (Sega System 2) machine implementation.
 #include "machine.h"
+#include "cfg.h"
 #include "mc8123.h"
 #include "video.h"
 #include <stdio.h>
@@ -278,6 +279,52 @@ int machine_init(system2 *m, const char *romdir) {
     return 0;
 }
 
+void machine_reset(system2 *m) {
+    // Preserve decoded ROMs and DIP switches, clear everything else.
+    uint8_t swa = m->in.swa, swb = m->in.swb;
+
+    memset(m->ram,          0, sizeof(m->ram));
+    memset(m->spriteram,    0, sizeof(m->spriteram));
+    memset(m->paletteram,   0, sizeof(m->paletteram));
+    memset(m->videoram,     0, sizeof(m->videoram));
+    memset(m->soundram,     0, sizeof(m->soundram));
+    memset(m->mix_collide,    0, sizeof(m->mix_collide));
+    memset(m->sprite_collide, 0, sizeof(m->sprite_collide));
+    m->mix_collide_summary = 0;
+    m->sprite_collide_summary = 0;
+
+    m->bank1 = 0;
+    m->videoram_bank = 0;
+    m->video_mode = 0;
+    m->flip = 0;
+    m->soundlatch = 0;
+    m->ppi_portc = 0xc0;
+    m->videoram_bank = m->ppi_portc;
+    m->sound_nmi_mask = 1;
+    m->sound_nmi_prev = 1;
+
+    z80_init(&m->maincpu);
+    m->maincpu.userdata   = m;
+    m->maincpu.read_byte  = main_read;
+    m->maincpu.write_byte = main_write;
+    m->maincpu.fetch_opcode = main_fetch;
+    m->maincpu.port_in    = main_port_in;
+    m->maincpu.port_out   = main_port_out;
+
+    z80_init(&m->soundcpu);
+    m->soundcpu.userdata   = m;
+    m->soundcpu.read_byte  = sound_read;
+    m->soundcpu.write_byte = sound_write;
+    m->soundcpu.port_in    = sound_port_in;
+    m->soundcpu.port_out   = sound_port_out;
+
+    sn_init(&m->sn1, SOUND_XTAL / 4, AUDIO_SAMPLE_RATE);
+    sn_init(&m->sn2, SOUND_XTAL / 2, AUDIO_SAMPLE_RATE);
+
+    m->in.swa = swa;
+    m->in.swb = swb;
+}
+
 // Run both CPUs interleaved in slices so the sound latch handshake and audio
 // register writes line up with their timing; generate audio per slice.
 #define SLICES 8
@@ -334,4 +381,111 @@ int machine_run_frame(system2 *m, uint32_t *framebuffer, int16_t *audio) {
     video_render(m, framebuffer);
     g_frame++;
     return produced;
+}
+
+// ---------------------------------------------------------------------------
+// Save / load state
+// ---------------------------------------------------------------------------
+
+void machine_save(const system2 *m, savestate *s) {
+    memcpy(s->ram,        m->ram,        sizeof(s->ram));
+    memcpy(s->spriteram,  m->spriteram,  sizeof(s->spriteram));
+    memcpy(s->paletteram, m->paletteram, sizeof(s->paletteram));
+    memcpy(s->soundram,   m->soundram,   sizeof(s->soundram));
+    s->bank1        = m->bank1;
+    s->videoram_bank = m->videoram_bank;
+    s->video_mode   = m->video_mode;
+    s->flip         = m->flip;
+    s->soundlatch   = m->soundlatch;
+    s->ppi_portc    = m->ppi_portc;
+    s->valid        = 1;
+}
+
+void machine_load(system2 *m, const savestate *s) {
+    if (!s->valid) return;
+    memcpy(m->ram,        s->ram,        sizeof(s->ram));
+    memcpy(m->spriteram,  s->spriteram,  sizeof(s->spriteram));
+    memcpy(m->paletteram, s->paletteram, sizeof(s->paletteram));
+    memcpy(m->soundram,   s->soundram,   sizeof(s->soundram));
+    m->bank1        = s->bank1;
+    m->videoram_bank = s->videoram_bank;
+    m->video_mode   = s->video_mode;
+    m->flip         = s->flip;
+    m->soundlatch   = s->soundlatch;
+    m->ppi_portc    = s->ppi_portc;
+}
+
+// ---------------------------------------------------------------------------
+// Difficulty / cheat patches
+// ---------------------------------------------------------------------------
+
+void machine_set_difficulty(system2 *m, int difficulty) {
+    // SWB bits 7-6 select DIP difficulty (active-low: 1=OFF, 0=ON).
+    // Easy:   bits 7-6 = 11  (0xC0 mask, both OFF) → swb unchanged from 0xFF
+    // Normal: bits 7-6 = 10  (bit 6 ON)            → clear bit 6
+    // Hard:   bits 7-6 = 01  (bit 7 ON)            → clear bit 7
+    uint8_t swb = 0xff;
+    switch (difficulty) {
+    case 0: swb = 0xff;         break;  // EASY:   DIP Easy
+    case 1: swb = 0xff & ~0x40; break;  // NORMAL: DIP Normal
+    case 2: swb = 0xff & ~0x80; break;  // HARD:   DIP Hard
+    case 3: swb = 0xff;         break;  // CHEAT:  DIP Easy + RAM patches
+    }
+    m->in.swb = swb;
+}
+
+// RAM offsets — confirmed from MAME cheat file (cheats/wbml.xml):
+#define RAM_HP         0x202  // current HP
+#define RAM_HP_MAX     0x203  // max HP
+#define RAM_TIMER      0x344  // game timer (0 = freeze = no hourglass)
+#define RAM_SWORD      0x21A  // sword type: 1=Gradius 2=Broad 3=Great 4=Excalibur 5=Legend
+#define RAM_SHIELD     0x221  // shield: 0=none 7=Light 8=Knight 9=Hard 0xA=Legend
+#define RAM_ARMOUR     0x223  // armour: 0=none 0xB=Light 0xC=Knight 0xD=Heavy 0xE=Hard 0xF=Legend
+#define RAM_BOOTS      0x225  // boots:  0=none 0x10=Cloth 0x11=Leather 0x12=Ceramic 0x13=Legend
+// Gold stored as decimal digits: C21B=units C21C=tens C21D=hundreds C21F=? (MAME: Infinite Money @C21F=09)
+#define RAM_GOLD_UNITS 0x21B
+#define RAM_GOLD_TENS  0x21C
+#define RAM_GOLD_HUNDS 0x21D
+
+static unsigned read_gold(system2 *m) {
+    return m->ram[RAM_GOLD_HUNDS] * 100u
+         + m->ram[RAM_GOLD_TENS]  * 10u
+         + m->ram[RAM_GOLD_UNITS];
+}
+
+static void write_gold(system2 *m, unsigned g) {
+    m->ram[RAM_GOLD_HUNDS] = (uint8_t)(g / 100 % 10);
+    m->ram[RAM_GOLD_TENS]  = (uint8_t)(g /  10 % 10);
+    m->ram[RAM_GOLD_UNITS] = (uint8_t)(g        % 10);
+}
+
+void machine_cheat_tick(system2 *m, unsigned flags) {
+    if (!flags) return;
+
+    if (flags & CHEAT_TIMER)
+        m->ram[RAM_TIMER] = 0;
+
+    if (flags & CHEAT_ARMOUR)
+        if (m->ram[RAM_ARMOUR] < 0x0F) m->ram[RAM_ARMOUR] = 0x0F;
+
+    if (flags & CHEAT_SHIELD)
+        if (m->ram[RAM_SHIELD] < 0x0A) m->ram[RAM_SHIELD] = 0x0A;
+
+    if (flags & CHEAT_SWORD)
+        if (m->ram[RAM_SWORD] > 0 && m->ram[RAM_SWORD] < 0x05) m->ram[RAM_SWORD] = 0x05;
+
+    if (flags & CHEAT_BOOTS)
+        if (m->ram[RAM_BOOTS] > 0 && m->ram[RAM_BOOTS] < 0x13) m->ram[RAM_BOOTS] = 0x13;
+
+    if (flags & CHEAT_COIN) {
+        static unsigned s_prev_gold = 0;
+        unsigned gold = read_gold(m);
+        if (gold > s_prev_gold) {
+            unsigned gain = gold - s_prev_gold;
+            if (gain < 15) gold = s_prev_gold + 15;
+            if (gain > 66) gold = s_prev_gold + 66;
+            write_gold(m, gold);
+        }
+        s_prev_gold = read_gold(m);
+    }
 }

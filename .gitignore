@@ -1,5 +1,6 @@
 # build outputs (decoded ROMs, exes, captured frames)
 /build/
+/cmake-build/
 
 # object files
 *.o

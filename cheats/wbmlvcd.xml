@@ -1,0 +1,172 @@
+<mamecheat version="1">
+
+  <cheat desc="Infinite Time">
+    <script state="run">
+      <action>maincpu.pb@C344=00</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Infinite Energy">
+    <script state="run">
+      <action condition="(frame % 420 == 0)">maincpu.pw@C202=0A0A</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Infinite Pills">
+    <script state="run">
+      <action>maincpu.pb@C216=01</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Infinite Money">
+    <script state="run">
+      <action>maincpu.pb@C21F=09</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Infinite Gauntlet">
+    <script state="run">
+      <action>maincpu.pb@C23C=09</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Infinite Helmet">
+    <script state="run">
+      <action>maincpu.pb@C23D=09</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Infinite Boots">
+    <script state="run">
+      <action>maincpu.pb@C23B=09</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Infinite Extra POW">
+    <script state="run">
+      <action>maincpu.pb@C226=01</action>
+      <action>maincpu.pb@C228=99</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Get Extra Power - Whirlwind Now!">
+    <script state="on">
+      <action>maincpu.pb@C227=14</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Get Extra Power - Bomb Now!">
+    <script state="on">
+      <action>maincpu.pb@C227=15</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Get Extra Power - Lightning Now!">
+    <script state="on">
+      <action>maincpu.pb@C227=16</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Get Extra Power - Fireball Now!">
+    <script state="on">
+      <action>maincpu.pb@C227=17</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Always have the Key">
+    <script state="run">
+      <action>maincpu.pb@C215=01</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Get the Key Now!">
+    <script state="on">
+      <action>maincpu.pb@C215=01</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Select Sword">
+    <parameter>
+      <item value="0x01">Gradius Sword</item>
+      <item value="0x02">Broad Sword</item>
+      <item value="0x03">Great Sword</item>
+      <item value="0x04">Excalibur</item>
+      <item value="0x05">Sword of Legend</item>
+    </parameter>
+    <script state="run">
+      <action>maincpu.pb@C21A=param</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Select Bell/Crystal">
+    <parameter>
+      <item value="0x05">Bell</item>
+      <item value="0x06">Crystal</item>
+    </parameter>
+    <script state="run">
+      <action>maincpu.pb@C213=param</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Select Shield">
+    <parameter>
+      <item value="0x00">No Shield</item>
+      <item value="0x07">Light</item>
+      <item value="0x08">Knight</item>
+      <item value="0x09">Hard</item>
+      <item value="0x0A">Legend</item>
+    </parameter>
+    <script state="run">
+      <action>maincpu.pb@C221=param</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Select Armour">
+    <parameter>
+      <item value="0x00">No Armour</item>
+      <item value="0x0B">Light</item>
+      <item value="0x0C">Knight</item>
+      <item value="0x0D">Heavy</item>
+      <item value="0x0E">Hard</item>
+      <item value="0x0F">Legend</item>
+    </parameter>
+    <script state="run">
+      <action>maincpu.pb@C223=param</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Select Boots">
+    <parameter>
+      <item value="0x00">No Boots</item>
+      <item value="0x10">Cloth</item>
+      <item value="0x11">Leather</item>
+      <item value="0x12">Ceramic</item>
+      <item value="0x13">Legend</item>
+    </parameter>
+    <script state="run">
+      <action>maincpu.pb@C225=param</action>
+    </script>
+  </cheat>
+
+  <cheat desc=" "/>
+
+  <cheat desc="Enable Test Mode"> <comment>Set on title screen (In Test Mode, you will have legendary equipment and 99 lightning spells. Also with START button, next round is available).</comment>
+    <script state="run">
+      <action>maincpu.pb@C0A4=01</action>
+    </script>
+    <script state="off">
+      <action>maincpu.pb@C0A4=00</action>
+    </script>
+  </cheat>
+
+  <cheat desc="Sound Test">
+    <parameter min="1" max="63" step="1"/>
+    <script state="change">
+      <action>soundcpu.pb@801F=00</action>
+      <action>soundcpu.pb@8020=param</action>
+      <action>soundcpu.pb@801E=01</action>
+    </script>
+  </cheat>
+
+</mamecheat>
+<!-- Cheat file downloaded from https://www.mamecheat.co.uk, see cheat.txt for list of contributors. -->
