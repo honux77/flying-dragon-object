@@ -157,7 +157,7 @@ static void fill_rect(SDL_Renderer *r, int x, int y, int w, int h, Col col) {
 // ---------------------------------------------------------------------------
 // Menu state machine
 // ---------------------------------------------------------------------------
-typedef enum { MS_MAIN, MS_KEYS, MS_JOY } MenuScreen;
+typedef enum { MS_MAIN, MS_KEYS, MS_JOY, MS_CHEAT } MenuScreen;
 
 // Action names for keyboard settings
 static const char *k_labels[] = {
@@ -208,17 +208,18 @@ static void draw_sep(SDL_Renderer *r, int row) {
 }
 
 // Draw header + footer chrome shared by all screens
-static void draw_chrome(SDL_Renderer *r, const char *title) {
-    // background
+static void draw_chrome_hint(SDL_Renderer *r, const char *title, const char *hint) {
     SDL_SetRenderDrawColor(r, 8, 8, 48, 255);
     SDL_RenderClear(r);
-    // title bar
     fill_rect(r, 0, 0, 256, 10, (Col){0,0,80});
     draw_str_c(r, 128, 1, title, YELLOW);
     draw_sep(r, 2);
-    // footer
     draw_sep(r, ROWS - 3);
-    draw_str_c(r, 128, CY(ROWS-2), "UP/DN:SELECT  ENTER:OK  ESC:BACK", GRAY);
+    draw_str_c(r, 128, CY(ROWS-2), hint, GRAY);
+}
+
+static void draw_chrome(SDL_Renderer *r, const char *title) {
+    draw_chrome_hint(r, title, "UP/DN:SELECT  ENTER:OK  ESC:BACK");
 }
 
 // ---------------------------------------------------------------------------
@@ -227,23 +228,25 @@ static void draw_chrome(SDL_Renderer *r, const char *title) {
 static const char *main_items[] = {
     "KEYBOARD SETTINGS",
     "JOYSTICK SETTINGS",
-    "DIFFICULTY",       // idx 2: L/R to change, ENTER to cycle
+    "DIFFICULTY",
+    "CHEAT SETTINGS",
     "START GAME",
     "QUIT"
 };
-#define MAIN_N        5
-#define MAIN_IDX_DIFF 2
-#define MAIN_IDX_START 3
-#define MAIN_IDX_QUIT  4
+#define MAIN_N         6
+#define MAIN_IDX_DIFF  2
+#define MAIN_IDX_CHEAT 3
+#define MAIN_IDX_START 4
+#define MAIN_IDX_QUIT  5
 
-static const char *diff_names[] = { "EASY", "NORMAL", "HARD", "CHEAT" };
-#define DIFF_N 4
+static const char *diff_names[] = { "EASY", "NORMAL", "HARD" };
+#define DIFF_N 3
 
-static void draw_main(SDL_Renderer *r, int sel, int difficulty) {
+static void draw_main(SDL_Renderer *r, int sel, int difficulty, unsigned cheat_flags) {
     draw_chrome(r, "Dragon Is a UFO!!");
-    int y0 = CY(5);
+    int y0 = CY(4);
     for (int i = 0; i < MAIN_N; i++) {
-        int y = y0 + i * 18;
+        int y = y0 + i * 17;
         int is_sel = (i == sel);
         Col c = is_sel ? YELLOW : WHITE;
         if (is_sel) draw_str(r, CX(2), y, ">", YELLOW);
@@ -253,7 +256,41 @@ static void draw_main(SDL_Renderer *r, int sel, int difficulty) {
             snprintf(buf, sizeof(buf), "< %-6s >", diff_names[difficulty]);
             draw_str(r, CX(16), y, buf, is_sel ? CYAN : GRAY);
         }
+        if (i == MAIN_IDX_CHEAT) {
+            draw_str(r, CX(20), y, cheat_flags ? "ON" : "OFF", cheat_flags ? CYAN : GRAY);
+        }
     }
+}
+
+// ---------------------------------------------------------------------------
+// CHEAT SETTINGS
+// ---------------------------------------------------------------------------
+static const struct { const char *label; unsigned flag; } cheat_items[] = {
+    { "FREEZE TIMER",  CHEAT_TIMER  },
+    { "LEGEND ARMOUR", CHEAT_ARMOUR },
+    { "LEGEND SHIELD", CHEAT_SHIELD },
+    { "LEGEND SWORD",  CHEAT_SWORD  },
+    { "LEGEND BOOTS",  CHEAT_BOOTS  },
+    { "RICH GAME",     CHEAT_COIN   },
+};
+#define CHEAT_N ((int)(sizeof(cheat_items)/sizeof(cheat_items[0])))
+
+static void draw_cheat(SDL_Renderer *r, int sel, unsigned flags) {
+    draw_chrome_hint(r, "CHEAT SETTINGS", "ENTER/SPACE:TOGGLE  ESC:BACK");
+    int y0 = CY(3);
+    for (int i = 0; i < CHEAT_N; i++) {
+        int y = y0 + i * 17;
+        int is_sel = (i == sel);
+        int on = (flags & cheat_items[i].flag) != 0;
+        Col c = is_sel ? YELLOW : WHITE;
+        if (is_sel) draw_str(r, CX(1), y, ">", YELLOW);
+        draw_str(r, CX(3), y, on ? "[X]" : "[ ]", on ? CYAN : GRAY);
+        draw_str(r, CX(7), y, cheat_items[i].label, c);
+    }
+    int y_back = y0 + CHEAT_N * 17;
+    Col bc = (sel == CHEAT_N) ? YELLOW : WHITE;
+    if (sel == CHEAT_N) draw_str(r, CX(1), y_back, ">", YELLOW);
+    draw_str(r, CX(3), y_back, "BACK", bc);
 }
 
 // ---------------------------------------------------------------------------
@@ -438,11 +475,12 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
     while (running) {
         // Render
         switch (screen) {
-        case MS_MAIN: draw_main(ren, sel, cfg->difficulty); break;
+        case MS_MAIN:  draw_main(ren, sel, cfg->difficulty, cfg->cheat_flags); break;
         case MS_KEYS: draw_keys(ren, cfg, sel, rebinding); break;
-        case MS_JOY:  draw_joy (ren, cfg, sel, detecting);
-                      draw_joy_hint(ren, sel, detecting);
-                      break;
+        case MS_JOY:   draw_joy (ren, cfg, sel, detecting);
+                       draw_joy_hint(ren, sel, detecting);
+                       break;
+        case MS_CHEAT: draw_cheat(ren, sel, cfg->cheat_flags); break;
         }
         present(ren);
 
@@ -500,15 +538,17 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
             if (e.type != SDL_KEYDOWN) continue;
             SDL_Scancode sc = e.key.keysym.scancode;
 
-            int max_sel = (screen == MS_MAIN) ? MAIN_N - 1
-                        : (screen == MS_KEYS) ? NUM_KEYS
-                        :                       NUM_JOY_ROWS;
+            int max_sel = (screen == MS_MAIN)  ? MAIN_N - 1
+                        : (screen == MS_KEYS)  ? NUM_KEYS
+                        : (screen == MS_CHEAT) ? CHEAT_N
+                        :                        NUM_JOY_ROWS;
 
             if (sc == SDL_SCANCODE_UP)   { sel = (sel > 0) ? sel - 1 : max_sel; continue; }
             if (sc == SDL_SCANCODE_DOWN) { sel = (sel < max_sel) ? sel + 1 : 0; continue; }
 
             if (sc == SDL_SCANCODE_ESCAPE) {
-                if (screen != MS_MAIN) { screen = MS_MAIN; sel = 0; }
+                if (screen == MS_CHEAT) { screen = MS_MAIN; sel = MAIN_IDX_CHEAT; }
+                else if (screen != MS_MAIN) { screen = MS_MAIN; sel = 0; }
                 continue;
             }
 
@@ -526,11 +566,13 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
                 }
             }
 
-            if (sc == SDL_SCANCODE_RETURN || sc == SDL_SCANCODE_KP_ENTER) {
+            if (sc == SDL_SCANCODE_RETURN || sc == SDL_SCANCODE_KP_ENTER ||
+                sc == SDL_SCANCODE_SPACE) {
                 if (screen == MS_MAIN) {
                     switch (sel) {
-                    case 0: screen = MS_KEYS; sel = 0; break;
-                    case 1: screen = MS_JOY;  sel = 0; break;
+                    case 0:              screen = MS_KEYS;  sel = 0; break;
+                    case 1:              screen = MS_JOY;   sel = 0; break;
+                    case MAIN_IDX_CHEAT: screen = MS_CHEAT; sel = 0; break;
                     case MAIN_IDX_DIFF:
                         cfg->difficulty = (cfg->difficulty + 1) % DIFF_N;
                         cfg_save(cfg, cfg_path);
@@ -545,6 +587,12 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
                     if (sel == NUM_JOY_ROWS) { screen = MS_MAIN; sel = 0; }
                     else if (sel == 0) { /* handled by L/R below */ }
                     else               { detecting = 1; }
+                } else if (screen == MS_CHEAT) {
+                    if (sel == CHEAT_N) { screen = MS_MAIN; sel = MAIN_IDX_CHEAT; }
+                    else {
+                        cfg->cheat_flags ^= cheat_items[sel].flag;
+                        cfg_save(cfg, cfg_path);
+                    }
                 }
                 continue;
             }

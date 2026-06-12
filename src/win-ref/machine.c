@@ -1,5 +1,6 @@
 // wbml (Sega System 2) machine implementation.
 #include "machine.h"
+#include "cfg.h"
 #include "mc8123.h"
 #include "video.h"
 #include <stdio.h>
@@ -458,22 +459,33 @@ static void write_gold(system2 *m, unsigned g) {
     m->ram[RAM_GOLD_UNITS] = (uint8_t)(g        % 10);
 }
 
-void machine_easy_tick(system2 *m) {
-    // --- Freeze game timer (no hourglass penalty) ---
-    m->ram[RAM_TIMER] = 0;
+void machine_cheat_tick(system2 *m, unsigned flags) {
+    if (!flags) return;
 
-    // --- Max armour + shield (damage reduction via equipment) ---
-    if (m->ram[RAM_ARMOUR] < 0x0F) m->ram[RAM_ARMOUR] = 0x0F;  // Legend Armour
-    if (m->ram[RAM_SHIELD] < 0x0A) m->ram[RAM_SHIELD] = 0x0A;  // Legend Shield
+    if (flags & CHEAT_TIMER)
+        m->ram[RAM_TIMER] = 0;
 
-    // --- Coin minimum: each pickup adds between 15 and 66 gold ---
-    static unsigned s_prev_gold = 0;
-    unsigned gold = read_gold(m);
-    if (gold > s_prev_gold) {
-        unsigned gain = gold - s_prev_gold;
-        if (gain < 15) gold = s_prev_gold + 15;
-        if (gain > 66) gold = s_prev_gold + 66;
-        write_gold(m, gold);
+    if (flags & CHEAT_ARMOUR)
+        if (m->ram[RAM_ARMOUR] < 0x0F) m->ram[RAM_ARMOUR] = 0x0F;
+
+    if (flags & CHEAT_SHIELD)
+        if (m->ram[RAM_SHIELD] < 0x0A) m->ram[RAM_SHIELD] = 0x0A;
+
+    if (flags & CHEAT_SWORD)
+        if (m->ram[RAM_SWORD] > 0 && m->ram[RAM_SWORD] < 0x05) m->ram[RAM_SWORD] = 0x05;
+
+    if (flags & CHEAT_BOOTS)
+        if (m->ram[RAM_BOOTS] > 0 && m->ram[RAM_BOOTS] < 0x13) m->ram[RAM_BOOTS] = 0x13;
+
+    if (flags & CHEAT_COIN) {
+        static unsigned s_prev_gold = 0;
+        unsigned gold = read_gold(m);
+        if (gold > s_prev_gold) {
+            unsigned gain = gold - s_prev_gold;
+            if (gain < 15) gold = s_prev_gold + 15;
+            if (gain > 66) gold = s_prev_gold + 66;
+            write_gold(m, gold);
+        }
+        s_prev_gold = read_gold(m);
     }
-    s_prev_gold = read_gold(m);
 }

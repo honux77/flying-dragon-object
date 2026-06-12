@@ -96,9 +96,9 @@ void machine_load(system2 *m, const savestate *s);
 // Call after machine_init() and after machine_reset().
 void machine_set_difficulty(system2 *m, int difficulty);
 
-// Per-frame Easy-mode cheat patches (MAME-cheat style RAM writes).
-// Call once per frame when difficulty == 0.
-void machine_easy_tick(system2 *m);
+// Per-frame cheat patches (MAME-cheat style RAM writes).
+// Pass cfg.cheat_flags; call every frame (flags==0 is a no-op).
+void machine_cheat_tick(system2 *m, unsigned cheat_flags);
 
 // Run one ~1/60s video frame: executes main + sound CPU cycles (interleaved)
 // and fires the VBLANK / sound interrupts, renders into the framebuffer, and
