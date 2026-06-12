@@ -236,7 +236,8 @@ static const char *main_items[] = {
 #define MAIN_IDX_START 3
 #define MAIN_IDX_QUIT  4
 
-static const char *diff_names[] = { "EASY", "NORMAL", "HARD" };
+static const char *diff_names[] = { "EASY", "NORMAL", "HARD", "CHEAT" };
+#define DIFF_N 4
 
 static void draw_main(SDL_Renderer *r, int sel, int difficulty) {
     draw_chrome(r, "Dragon Is a UFO!!");
@@ -478,12 +479,12 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
             // Difficulty row: L/R to change
             if (screen == MS_MAIN && sel == MAIN_IDX_DIFF) {
                 if (sc == SDL_SCANCODE_LEFT) {
-                    cfg->difficulty = (cfg->difficulty + 2) % 3;
+                    cfg->difficulty = (cfg->difficulty + DIFF_N - 1) % DIFF_N;
                     cfg_save(cfg, cfg_path);
                     continue;
                 }
                 if (sc == SDL_SCANCODE_RIGHT) {
-                    cfg->difficulty = (cfg->difficulty + 1) % 3;
+                    cfg->difficulty = (cfg->difficulty + 1) % DIFF_N;
                     cfg_save(cfg, cfg_path);
                     continue;
                 }
@@ -495,7 +496,7 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
                     case 0: screen = MS_KEYS; sel = 0; break;
                     case 1: screen = MS_JOY;  sel = 0; break;
                     case MAIN_IDX_DIFF:
-                        cfg->difficulty = (cfg->difficulty + 1) % 3;
+                        cfg->difficulty = (cfg->difficulty + 1) % DIFF_N;
                         cfg_save(cfg, cfg_path);
                         break;
                     case MAIN_IDX_START: running = 0; result = 1; break;

@@ -1,7 +1,7 @@
 #pragma once
 #include <SDL.h>
 
-// difficulty: 0=EASY  1=NORMAL  2=HARD
+// difficulty: 0=EASY  1=NORMAL  2=HARD  3=CHEAT
 typedef struct {
     SDL_Scancode k_left, k_right, k_up, k_down;
     SDL_Scancode k_jump, k_attack, k_turbo;

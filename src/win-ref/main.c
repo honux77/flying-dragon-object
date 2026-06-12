@@ -207,7 +207,7 @@ int main(int argc, char **argv) {
         poll_input(&m, &cfg, joy);
         static int16_t audio[AUDIO_MAX_FRAME];
         int nsamp = machine_run_frame(&m, fb, audio);
-        if (cfg.difficulty == 0) machine_easy_tick(&m);
+        if (cfg.difficulty == 3) machine_easy_tick(&m);
         if (adev) {
             if (SDL_GetQueuedAudioSize(adev) < (Uint32)(AUDIO_SAMPLE_RATE / 4 * sizeof(int16_t)))
                 SDL_QueueAudio(adev, audio, nsamp * sizeof(int16_t));

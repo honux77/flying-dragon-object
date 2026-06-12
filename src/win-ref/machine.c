@@ -396,6 +396,7 @@ void machine_set_difficulty(system2 *m, int difficulty) {
     case 0: swb = 0xff;         break;  // EASY:   DIP Easy
     case 1: swb = 0xff & ~0x40; break;  // NORMAL: DIP Normal
     case 2: swb = 0xff & ~0x80; break;  // HARD:   DIP Hard
+    case 3: swb = 0xff;         break;  // CHEAT:  DIP Easy + RAM patches
     }
     m->in.swb = swb;
 }
