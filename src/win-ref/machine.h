@@ -73,6 +73,14 @@ int machine_init(system2 *m, const char *romdir);
 // Soft-reset: re-initialises CPUs and clears RAM without reloading ROMs.
 void machine_reset(system2 *m);
 
+// Set DIP switches for the requested difficulty (0=EASY 1=NORMAL 2=HARD).
+// Call after machine_init() and after machine_reset().
+void machine_set_difficulty(system2 *m, int difficulty);
+
+// Per-frame Easy-mode cheat patches (MAME-cheat style RAM writes).
+// Call once per frame when difficulty == 0.
+void machine_easy_tick(system2 *m);
+
 // Run one ~1/60s video frame: executes main + sound CPU cycles (interleaved)
 // and fires the VBLANK / sound interrupts, renders into the framebuffer, and
 // produces stereo-interleaved? no — mono audio samples into `audio` (one int16

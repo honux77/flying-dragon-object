@@ -140,6 +140,9 @@ int main(int argc, char **argv) {
         }
     }
 
+    // Apply difficulty (DIP switches + easy-mode state)
+    machine_set_difficulty(&m, cfg.difficulty);
+
     // Open joystick if configured
     SDL_Joystick *joy = NULL;
     if (cfg.joy_index >= 0 && cfg.joy_index < SDL_NumJoysticks())
@@ -166,6 +169,7 @@ int main(int argc, char **argv) {
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) running = 0;
             if (e.type == SDL_KEYDOWN && e.key.keysym.scancode == cfg.k_reset) {
                 machine_reset(&m);
+                machine_set_difficulty(&m, cfg.difficulty);
                 frame = 0;
             }
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F12) {
@@ -184,11 +188,26 @@ int main(int argc, char **argv) {
                     printf("wrote %s\n", name);
                 }
             }
+            // RAM snapshot for address hunting: press 0 to dump C200-C23F
+            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_0) {
+                char name[64];
+                snprintf(name, sizeof(name), "build/ram_%ld.bin", frame);
+                FILE *f = fopen(name, "wb");
+                if (f) { fwrite(m.ram, 1, sizeof(m.ram), f); fclose(f); }
+                printf("[ram] frame=%ld  C200:", frame);
+                for (int i = 0; i < 0x40; i++) {
+                    if (i % 16 == 0) printf("\n  C%03X:", 0x200 + i);
+                    printf(" %02X", m.ram[0x200 + i]);
+                }
+                printf("\n");
+                fflush(stdout);
+            }
         }
 
         poll_input(&m, &cfg, joy);
         static int16_t audio[AUDIO_MAX_FRAME];
         int nsamp = machine_run_frame(&m, fb, audio);
+        if (cfg.difficulty == 0) machine_easy_tick(&m);
         if (adev) {
             if (SDL_GetQueuedAudioSize(adev) < (Uint32)(AUDIO_SAMPLE_RATE / 4 * sizeof(int16_t)))
                 SDL_QueueAudio(adev, audio, nsamp * sizeof(int16_t));

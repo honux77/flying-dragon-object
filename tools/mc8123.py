@@ -275,7 +275,7 @@ def decode_region(region, key_rom, ranges):
 
 def main():
     root = Path(__file__).resolve().parent.parent
-    romdir = root / "roms" / "wbml"
+    romdir = root / "roms"
     outdir = root / "build"
     outdir.mkdir(exist_ok=True)
 

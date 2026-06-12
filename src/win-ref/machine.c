@@ -381,3 +381,72 @@ int machine_run_frame(system2 *m, uint32_t *framebuffer, int16_t *audio) {
     g_frame++;
     return produced;
 }
+
+// ---------------------------------------------------------------------------
+// Difficulty / cheat patches
+// ---------------------------------------------------------------------------
+
+void machine_set_difficulty(system2 *m, int difficulty) {
+    // SWB bits 7-6 select DIP difficulty (active-low: 1=OFF, 0=ON).
+    // Easy:   bits 7-6 = 11  (0xC0 mask, both OFF) → swb unchanged from 0xFF
+    // Normal: bits 7-6 = 10  (bit 6 ON)            → clear bit 6
+    // Hard:   bits 7-6 = 01  (bit 7 ON)            → clear bit 7
+    uint8_t swb = 0xff;
+    switch (difficulty) {
+    case 0: swb = 0xff;         break;  // EASY:   DIP Easy
+    case 1: swb = 0xff & ~0x40; break;  // NORMAL: DIP Normal
+    case 2: swb = 0xff & ~0x80; break;  // HARD:   DIP Hard
+    }
+    m->in.swb = swb;
+}
+
+// RAM offsets (relative to m->ram, base address C000):
+//   C202 (offset 0x202): current HP hearts (initialised from DIP, max=C203=5).
+//   C201 (offset 0x201): HP sub-counter / animation state.
+//
+// Gold address: TBD — needs a live debugging session to confirm.
+//   Candidate range: C210-C220 (16-bit BCD or binary).
+//   To find it: run the game, collect a coin, diff the RAM snapshot.
+
+#define RAM_HP         0x202  // current HP (byte, 0..max)
+#define RAM_HP_MAX     0x203  // max HP     (byte, set to 5 at new game)
+// Gold is stored as decimal digits: hundreds@C21D, tens@C21C, units@C21B
+#define RAM_GOLD_UNITS 0x21B
+#define RAM_GOLD_TENS  0x21C
+#define RAM_GOLD_HUNDS 0x21D
+
+static unsigned read_gold(system2 *m) {
+    return m->ram[RAM_GOLD_HUNDS] * 100u
+         + m->ram[RAM_GOLD_TENS]  * 10u
+         + m->ram[RAM_GOLD_UNITS];
+}
+
+static void write_gold(system2 *m, unsigned g) {
+    m->ram[RAM_GOLD_HUNDS] = (uint8_t)(g / 100 % 10);
+    m->ram[RAM_GOLD_TENS]  = (uint8_t)(g /  10 % 10);
+    m->ram[RAM_GOLD_UNITS] = (uint8_t)(g        % 10);
+}
+
+void machine_easy_tick(system2 *m) {
+    // --- Damage reduction: halve each HP loss ---
+    static uint8_t s_prev_hp = 0xFF;
+    uint8_t hp = m->ram[RAM_HP];
+    if (s_prev_hp != 0xFF && hp < s_prev_hp) {
+        unsigned loss    = s_prev_hp - hp;
+        unsigned reduced = (loss > 1) ? (loss + 1) / 2 : loss;  // ceil(loss/2)
+        m->ram[RAM_HP] = (uint8_t)(s_prev_hp - reduced);
+        hp = m->ram[RAM_HP];
+    }
+    s_prev_hp = hp;
+
+    // --- Coin minimum: each pickup adds between 15 and 66 gold ---
+    static unsigned s_prev_gold = 0;
+    unsigned gold = read_gold(m);
+    if (gold > s_prev_gold) {
+        unsigned gain = gold - s_prev_gold;
+        if (gain < 15) gold = s_prev_gold + 15;
+        if (gain > 66) gold = s_prev_gold + 66;
+        write_gold(m, gold);
+    }
+    s_prev_gold = read_gold(m);
+}

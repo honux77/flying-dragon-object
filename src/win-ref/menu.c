@@ -227,19 +227,31 @@ static void draw_chrome(SDL_Renderer *r, const char *title) {
 static const char *main_items[] = {
     "KEYBOARD SETTINGS",
     "JOYSTICK SETTINGS",
+    "DIFFICULTY",       // idx 2: L/R to change, ENTER to cycle
     "START GAME",
     "QUIT"
 };
-#define MAIN_N 4
+#define MAIN_N        5
+#define MAIN_IDX_DIFF 2
+#define MAIN_IDX_START 3
+#define MAIN_IDX_QUIT  4
 
-static void draw_main(SDL_Renderer *r, int sel) {
+static const char *diff_names[] = { "EASY", "NORMAL", "HARD" };
+
+static void draw_main(SDL_Renderer *r, int sel, int difficulty) {
     draw_chrome(r, "Dragon Is a UFO!!");
     int y0 = CY(5);
     for (int i = 0; i < MAIN_N; i++) {
         int y = y0 + i * 18;
-        Col c = (i == sel) ? YELLOW : WHITE;
-        if (i == sel) draw_str(r, CX(2), y, ">", YELLOW);
+        int is_sel = (i == sel);
+        Col c = is_sel ? YELLOW : WHITE;
+        if (is_sel) draw_str(r, CX(2), y, ">", YELLOW);
         draw_str(r, CX(4), y, main_items[i], c);
+        if (i == MAIN_IDX_DIFF) {
+            char buf[20];
+            snprintf(buf, sizeof(buf), "< %-6s >", diff_names[difficulty]);
+            draw_str(r, CX(16), y, buf, is_sel ? CYAN : GRAY);
+        }
     }
 }
 
@@ -389,7 +401,7 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
     while (running) {
         // Render
         switch (screen) {
-        case MS_MAIN: draw_main(ren, sel); break;
+        case MS_MAIN: draw_main(ren, sel, cfg->difficulty); break;
         case MS_KEYS: draw_keys(ren, cfg, sel, rebinding); break;
         case MS_JOY:  draw_joy (ren, cfg, sel, detecting);
                       draw_joy_hint(ren, sel, detecting);
@@ -463,13 +475,31 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
                 continue;
             }
 
+            // Difficulty row: L/R to change
+            if (screen == MS_MAIN && sel == MAIN_IDX_DIFF) {
+                if (sc == SDL_SCANCODE_LEFT) {
+                    cfg->difficulty = (cfg->difficulty + 2) % 3;
+                    cfg_save(cfg, cfg_path);
+                    continue;
+                }
+                if (sc == SDL_SCANCODE_RIGHT) {
+                    cfg->difficulty = (cfg->difficulty + 1) % 3;
+                    cfg_save(cfg, cfg_path);
+                    continue;
+                }
+            }
+
             if (sc == SDL_SCANCODE_RETURN || sc == SDL_SCANCODE_KP_ENTER) {
                 if (screen == MS_MAIN) {
                     switch (sel) {
                     case 0: screen = MS_KEYS; sel = 0; break;
                     case 1: screen = MS_JOY;  sel = 0; break;
-                    case 2: running = 0; result = 1; break;
-                    case 3: running = 0; result = 0; break;
+                    case MAIN_IDX_DIFF:
+                        cfg->difficulty = (cfg->difficulty + 1) % 3;
+                        cfg_save(cfg, cfg_path);
+                        break;
+                    case MAIN_IDX_START: running = 0; result = 1; break;
+                    case MAIN_IDX_QUIT:  running = 0; result = 0; break;
                     }
                 } else if (screen == MS_KEYS) {
                     if (sel == NUM_KEYS) { screen = MS_MAIN; sel = 0; }
