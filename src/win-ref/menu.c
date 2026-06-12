@@ -470,45 +470,26 @@ void osd_draw(SDL_Renderer *r, const char *msg, int timer, int max_timer) {
 // HELP screen
 // ---------------------------------------------------------------------------
 static void draw_help(SDL_Renderer *r, const wbml_cfg *cfg) {
+    (void)cfg;
     draw_chrome_hint(r, "HELP", "ESC:BACK");
 
     int y = CY(3);
-    const int S = 14;  // row step
+    const int S = 15;  // row step
 
-    draw_str(r, CX(1), y, "GAME", YELLOW); y += S;
     char buf[32];
 #define HELP_ROW(label, val) \
     draw_str(r, CX(2), y, (label), WHITE); \
-    draw_str(r, CX(13), y, (val), CYAN); y += S;
+    draw_str(r, CX(16), y, (val), CYAN); y += S;
 
-    snprintf(buf, sizeof(buf), "%s", SDL_GetScancodeName(cfg->k_left));
-    HELP_ROW("LEFT",   buf);
-    snprintf(buf, sizeof(buf), "%s", SDL_GetScancodeName(cfg->k_right));
-    HELP_ROW("RIGHT",  buf);
-    snprintf(buf, sizeof(buf), "%s", SDL_GetScancodeName(cfg->k_up));
-    HELP_ROW("UP",     buf);
-    snprintf(buf, sizeof(buf), "%s", SDL_GetScancodeName(cfg->k_down));
-    HELP_ROW("DOWN",   buf);
-    snprintf(buf, sizeof(buf), "%s", SDL_GetScancodeName(cfg->k_jump));
-    HELP_ROW("JUMP",   buf);
-    snprintf(buf, sizeof(buf), "%s", SDL_GetScancodeName(cfg->k_attack));
-    HELP_ROW("ATTACK", buf);
-    snprintf(buf, sizeof(buf), "%s", SDL_GetScancodeName(cfg->k_turbo));
-    HELP_ROW("TURBO",  buf);
-    snprintf(buf, sizeof(buf), "%s", SDL_GetScancodeName(cfg->k_coin));
-    HELP_ROW("COIN",   buf);
-    snprintf(buf, sizeof(buf), "%s", SDL_GetScancodeName(cfg->k_start1));
-    HELP_ROW("START",  buf);
-
-    draw_str(r, CX(1), y, "SYSTEM", YELLOW); y += S;
     snprintf(buf, sizeof(buf), "%s", SDL_GetScancodeName(cfg->k_reset));
-    HELP_ROW("RESET",       buf);
-    HELP_ROW("PAUSE",       "P");
-    HELP_ROW("SAVE STATE",  "F6");
-    HELP_ROW("LOAD STATE",  "F7");
-    HELP_ROW("PREV/NEXT SLOT", "F8 / F9");
-    HELP_ROW("SCREENSHOT",  "F12");
-    HELP_ROW("QUIT",        "ESC");
+    HELP_ROW("RESET",          buf);
+    HELP_ROW("PAUSE",          "P");
+    HELP_ROW("SAVE STATE",     "F6");
+    HELP_ROW("LOAD STATE",     "F7");
+    HELP_ROW("PREV SLOT",      "F8");
+    HELP_ROW("NEXT SLOT",      "F9");
+    HELP_ROW("SCREENSHOT",     "F12");
+    HELP_ROW("QUIT",           "ESC");
 #undef HELP_ROW
 }
 

@@ -29,30 +29,36 @@ static void poll_input(system2 *m, const wbml_cfg *cfg, SDL_Joystick *joy) {
     const Uint8 *k = SDL_GetKeyboardState(NULL);
     uint8_t p1 = 0, sys = 0;
 
-    if (k[cfg->k_left])   p1 |= 0x80;
-    if (k[cfg->k_right])  p1 |= 0x40;
-    if (k[cfg->k_up])     p1 |= 0x20;
-    if (k[cfg->k_down])   p1 |= 0x10;
+    int turbo_active = k[cfg->k_turbo] ||
+                       (joy && cfg->joy_btn_turbo >= 0 &&
+                        SDL_JoystickGetButton(joy, cfg->joy_btn_turbo));
+
+    if (!turbo_active) {
+        if (k[cfg->k_left])  p1 |= 0x80;
+        if (k[cfg->k_right]) p1 |= 0x40;
+        if (k[cfg->k_up])    p1 |= 0x20;
+        if (k[cfg->k_down])  p1 |= 0x10;
+    }
     if (k[cfg->k_jump])   p1 |= 0x02;
     if (k[cfg->k_attack]) p1 |= 0x04;
-    if (k[cfg->k_turbo])  {
-        if ((turbo_tick >> 1) & 1) p1 |= 0x80; else p1 |= 0x40;
-    }
     if (k[cfg->k_coin])   sys |= 0x01;
     if (k[cfg->k_start1]) sys |= 0x10;
 
     if (joy) {
-        if (joy_dir(joy, cfg->joy_btn_left))  p1 |= 0x80;
-        if (joy_dir(joy, cfg->joy_btn_right)) p1 |= 0x40;
-        if (joy_dir(joy, cfg->joy_btn_up))    p1 |= 0x20;
-        if (joy_dir(joy, cfg->joy_btn_down))  p1 |= 0x10;
+        if (!turbo_active) {
+            if (joy_dir(joy, cfg->joy_btn_left))  p1 |= 0x80;
+            if (joy_dir(joy, cfg->joy_btn_right)) p1 |= 0x40;
+            if (joy_dir(joy, cfg->joy_btn_up))    p1 |= 0x20;
+            if (joy_dir(joy, cfg->joy_btn_down))  p1 |= 0x10;
+        }
         if (cfg->joy_btn_jump   >= 0 && SDL_JoystickGetButton(joy, cfg->joy_btn_jump))   p1 |= 0x02;
         if (cfg->joy_btn_attack >= 0 && SDL_JoystickGetButton(joy, cfg->joy_btn_attack)) p1 |= 0x04;
-        if (cfg->joy_btn_turbo  >= 0 && SDL_JoystickGetButton(joy, cfg->joy_btn_turbo)) {
-            if ((turbo_tick >> 1) & 1) p1 |= 0x80; else p1 |= 0x40;
-        }
         if (cfg->joy_btn_coin  >= 0 && SDL_JoystickGetButton(joy, cfg->joy_btn_coin))  sys |= 0x01;
         if (cfg->joy_btn_start >= 0 && SDL_JoystickGetButton(joy, cfg->joy_btn_start)) sys |= 0x10;
+    }
+
+    if (turbo_active) {
+        if ((turbo_tick >> 1) & 1) p1 |= 0x80; else p1 |= 0x40;
     }
 
     m->in.p1  = p1;
