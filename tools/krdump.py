@@ -77,13 +77,7 @@ def draw_hex(img, x0, y0, text, col):
                     img[y0 + y][x0 + k * 5 + x] = col
 
 
-def main():
-    root = Path(__file__).resolve().parent.parent
-    tiles = load_tiles(root / 'roms-kr')
-    m6 = (root / 'roms-kr' / 'm-6.bin').read_bytes()
-    outdir = root / 'build' / 'krmap'
-    outdir.mkdir(parents=True, exist_ok=True)
-
+def split_chunks(m6):
     chunks, cur = [], []
     for b in m6[STR_BASE:STR_END]:
         if b == 0xFF:
@@ -94,15 +88,35 @@ def main():
             cur.append(b)
     if cur:
         chunks.append(cur)
+    return chunks
+
+
+def main():
+    root = Path(__file__).resolve().parent.parent
+    kr_tiles = load_tiles(root / 'roms-kr')
+    jp_tiles = load_tiles(root / 'roms-wbmljb')
+    kr_chunks = split_chunks((root / 'roms-kr' / 'm-6.bin').read_bytes())
+    jp_chunks = split_chunks((root / 'roms-wbmljb' / 'm-6.bin').read_bytes())
+    print(f'JP strings: {len(jp_chunks)}, KR strings: {len(kr_chunks)}')
+    outdir = root / 'build' / 'krmap'
+    outdir.mkdir(parents=True, exist_ok=True)
 
     S = 3
     CW = 9 * S
     CH = 8 * S + 12
     MAXC = 30
+    # Interleave: JP rows then KR rows per string, keeping a string's rows
+    # together on one page where possible.
     rows = []
-    for ci, ch in enumerate(chunks):
-        for start in range(0, len(ch), MAXC):
-            rows.append((ci, ch[start:start + MAXC]))
+    n = max(len(jp_chunks), len(kr_chunks))
+    for ci in range(n):
+        for tag, tiles, chunks in (('jp', jp_tiles, jp_chunks),
+                                   ('kr', kr_tiles, kr_chunks)):
+            if ci >= len(chunks):
+                continue
+            ch = chunks[ci]
+            for start in range(0, len(ch), MAXC):
+                rows.append((ci, tag, tiles, ch[start:start + MAXC]))
 
     PER_PAGE = 18
     npages = 0
@@ -111,8 +125,9 @@ def main():
         W = MAXC * CW + 40
         H = len(sel) * (CH + 6) + 6
         img = [[(25, 25, 55)] * W for _ in range(H)]
-        for ri, (ci, bs) in enumerate(sel):
+        for ri, (ci, tag, tiles, bs) in enumerate(sel):
             oy = ri * (CH + 6) + 4
+            label_col = (255, 140, 140) if tag == 'jp' else (120, 255, 120)
             for k, ch_ in enumerate(f'{ci:02x}'):
                 patt = HEX[ch_].split()
                 for y in range(5):
@@ -120,7 +135,7 @@ def main():
                         if patt[y][x] == '1':
                             for dy in range(2):
                                 for dx in range(2):
-                                    img[oy + 8 + y * 2 + dy][4 + k * 9 + x * 2 + dx] = (120, 255, 120)
+                                    img[oy + 8 + y * 2 + dy][4 + k * 9 + x * 2 + dx] = label_col
             for i, b in enumerate(bs):
                 ox = 40 + i * CW
                 px = tilepx(tiles, 0x800 + b)
@@ -133,7 +148,18 @@ def main():
                 draw_hex(img, ox, oy + 8 * S + 2, f'{b:02x}', (255, 200, 80))
         write_png(outdir / f'page_{pg // PER_PAGE:02d}.png', img)
         npages += 1
-    print(f'{len(chunks)} strings -> {npages} pages in {outdir}/')
+    print(f'-> {npages} pages in {outdir}/ '
+          '(string number: red = Japanese, green = Korean)')
+
+    # transcription template, one line per Korean string
+    tpl = outdir / 'kr_strings_template.txt'
+    with open(tpl, 'w', encoding='utf-8') as f:
+        f.write('# 한국어 받아쓰기: 각 줄의 "번호:" 뒤에 시트의 한글 텍스트를\n'
+                '# 보이는 그대로 입력하세요 (띄어쓰기 포함, 제어문자 무시).\n'
+                '# 잘 안 보이면 ?로 표시. 빈 줄/주석(#)은 무시됩니다.\n')
+        for ci in range(len(kr_chunks)):
+            f.write(f'{ci:02x}: \n')
+    print(f'template: {tpl}')
 
 
 if __name__ == '__main__':

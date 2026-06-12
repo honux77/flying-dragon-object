@@ -8,6 +8,10 @@
 #include "cfg.h"
 #include "menu.h"
 
+// Korean dialog overlay (krtext.c): repaints Hangul tile text with the
+// Galmuri9 font.  Active only when the Korean-patched ROM set is loaded.
+void krtext_overlay(uint32_t *disp, const system2 *m);
+
 // Read a direction-capable input: >= 0 = button, -2...-5 = hat (L/R/U/D), -1 = off.
 static int joy_dir(SDL_Joystick *joy, int v) {
     if (v == -1) return 0;
@@ -72,6 +76,11 @@ int main(int argc, char **argv) {
     int rom_ok = !machine_init(&m, romdir);
     if (!rom_ok)
         fprintf(stderr, "Place the ROM files listed above in '%s/' and retry.\n", romdir);
+
+    // Korean-patched tile ROM? (signature: redrawn ㄱ jamo at tile 0x800)
+    static const uint8_t kr_sig[8] = {0x7c,0x06,0x06,0x06,0x06,0x00,0x00,0x00};
+    int kr_mode = rom_ok && memcmp(m.tilerom + 0x4000, kr_sig, 8) == 0;
+    if (kr_mode) printf("Korean patch detected: Hangul overlay enabled\n");
 
     // optional sound-register logging for diagnostics: --snlog or SN_LOG=1
     {
@@ -277,6 +286,7 @@ int main(int argc, char **argv) {
                 uint32_t *dst = &disp[y * DISP_W];
                 for (int x = 0; x < DISP_W; x++) dst[x] = src[x * 2];
             }
+            if (kr_mode) krtext_overlay(disp, &m);
             SDL_UpdateTexture(tex, NULL, disp, DISP_W * sizeof(uint32_t));
         }
 
@@ -289,9 +299,9 @@ int main(int argc, char **argv) {
         if (headless_frames && frame >= headless_frames) {
             FILE *f = fopen("build/headless.ppm", "wb");
             if (f) {
-                fprintf(f, "P6\n%d %d\n255\n", SCREEN_W, SCREEN_H);
-                for (int p = 0; p < SCREEN_W * SCREEN_H; p++) {
-                    uint32_t c = fb[p];
+                fprintf(f, "P6\n%d %d\n255\n", DISP_W, DISP_H);
+                for (int p = 0; p < DISP_W * DISP_H; p++) {
+                    uint32_t c = disp[p];
                     fputc((c >> 16) & 0xff, f);
                     fputc((c >>  8) & 0xff, f);
                     fputc( c        & 0xff, f);

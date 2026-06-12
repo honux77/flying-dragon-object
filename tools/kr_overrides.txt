@@ -1,0 +1,111 @@
+# 수동 확정 매핑 (kralign.py가 자동 투표보다 우선 적용)
+# single <byte> <char> / body <byte> <jung> <jong|->
+# 출처: build/krmap/decoded.txt 문맥 판독
+
+single 15 돈
+single 2c 모
+single 69 습
+single 6c 으
+single 74 운
+single 83 호
+single 85 복
+single 86 고
+single 87 조
+single 88 른
+single 89 보
+single 8b 곳
+single 8c 프
+single 8d 근
+single 8e 봉
+single 97 동
+single 98 굴
+single 99 숨
+single 9a 우
+single 9d 빛
+single 9e 폭
+single a2 르
+single a3 수
+single a4 료
+single a6 분
+single a8 움
+single a9 줄
+single b2 옷
+single b3 볼
+single b7 불
+single c2 봤
+single c4 포
+
+single 96 놀
+single 81 쓰
+single 82 뜨
+single a7 도
+single c3 나
+single ad 준
+single 93 원
+single 84 두
+single a0 느
+single 65 몬
+single f9 돌
+single eb 쪽
+single c6 구
+single ec 름
+single e0 왔
+single fa 벨
+single bc 늘
+single b8 토
+single b1 물
+single c5 끝
+single c7 술
+single d3 크
+single 47 유
+single fc 들
+single af 노
+single e8 손
+single ea 될
+single e5 꼬
+single e6 독
+single b0 코
+single ba 추
+single f8 눈
+single fb 움
+single e1 초
+single b9 속
+single bb 줬
+single bd 놈
+single c0 온
+single c1 왕
+single c3 잖
+single c4 뽀
+single d8 췄
+single dd 표
+single e2 굉
+single e3 장
+single ed 환
+single ee 최
+single ef 몇
+single f1 즈
+
+body 19 ㅏ ㄷ
+body 1d ㅏ ㅅ
+body 1f ㅏ ㅈ
+body 20 ㅏ ㄱ
+body 21 ㅏ ㅌ
+body 22 ㅏ ㅍ
+body 23 ㅓ ㄱ
+body 28 ㅓ ㅂ
+body 30 ㅓ ㅍ
+body 35 ㅣ ㅁ
+body 3b ㅣ ㅍ
+body 40 ㅑ ㅇ
+body 4a ㅔ ㄴ
+body 4e ㅐ ㄱ
+body 4f ㅐ ㄴ
+body 54 ㅐ ㅇ
+body 57 ㅓ ㅄ
+body 5a ㅔ ㅆ
+body 6a ㅏ ㄶ
+body e9 ㅓ ㅎ
+body 0f ㅑ -
+body 11 ㅕ -
+body 1a ㅏ ㄹ
+body 8f ㅜ ㄴ

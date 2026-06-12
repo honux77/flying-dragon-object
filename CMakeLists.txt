@@ -33,6 +33,7 @@ add_executable(flydo
     src/win-ref/sn76489.c
     src/win-ref/cfg.c
     src/win-ref/menu.c
+    src/win-ref/krtext.c
     src/win-ref/z80/z80.c
 )
 
