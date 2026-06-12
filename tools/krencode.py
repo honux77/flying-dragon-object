@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Re-encode the in-game Korean strings from the user's translation file.
 
-Reads  build/krmap/kr_strings_template.txt  (the translation, one line per
+Reads  korean-patch/kr_strings.txt  (the translation, one line per
 string id) and rewrites the dialog strings inside roms-kr/m-6.bin in place,
 preserving each string's exact byte length and control structure:
 
@@ -115,7 +115,7 @@ def parse_skeleton(ch):
 
 def main():
     root = Path(__file__).resolve().parent.parent
-    texts = load_texts(root / 'build' / 'krmap' / 'kr_strings_template.txt')
+    texts = load_texts(root / 'korean-patch' / 'kr_strings.txt')
     nonhangul = load_nonhangul(root / 'build' / 'krmap' / 'mapping.txt')
     # user-typed variants of the same punctuation
     for a, b in (('.', '。'), ('。', '.')):

@@ -4,7 +4,7 @@ the tile-code -> syllable mapping.
 
 Inputs:
   - roms-kr/m-6.bin                       (patched strings)
-  - build/krmap/kr_strings_template.txt   (user transcription)
+  - korean-patch/kr_strings.txt           (user transcription)
 
 String structure: [ctrl x3] tokens... (FE [ctrl x3] tokens...)*
 Tokens: PAIR(cho 0x00-0x0D, body) = one syllable, or SINGLE(byte).
@@ -188,8 +188,7 @@ def load_overrides(path):
 def main():
     root = Path(__file__).resolve().parent.parent
     chunks = split_chunks((root / 'roms-kr' / 'm-6.bin').read_bytes())
-    texts = load_transcription(root / 'build' / 'krmap' /
-                               'kr_strings_template.txt')
+    texts = load_transcription(root / 'korean-patch' / 'kr_strings.txt')
     ov_singles, ov_bodies = load_overrides(root / 'tools' / 'kr_overrides.txt')
 
     single_votes = defaultdict(Counter)   # byte -> char votes
