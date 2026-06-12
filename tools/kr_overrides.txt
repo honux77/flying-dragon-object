@@ -76,7 +76,7 @@ single c0 온
 single c1 왕
 single c3 잖
 single c4 뽀
-single d8 췄
+# d4-db = 대사창 테두리 타일 — 매핑 금지 (d8을 췄로 오판독했었음)
 single dd 표
 single e2 굉
 single e3 장
