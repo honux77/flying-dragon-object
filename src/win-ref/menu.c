@@ -162,17 +162,17 @@ typedef enum { MS_MAIN, MS_KEYS, MS_JOY } MenuScreen;
 // Action names for keyboard settings
 static const char *k_labels[] = {
     "LEFT", "RIGHT", "UP", "DOWN",
-    "JUMP", "ATTACK", "TURBO", "COIN", "START1"
+    "JUMP", "ATTACK", "TURBO", "COIN", "START1", "RESET"
 };
 static SDL_Scancode *k_fields(wbml_cfg *c, int i) {
     SDL_Scancode *arr[] = {
         &c->k_left, &c->k_right, &c->k_up, &c->k_down,
         &c->k_jump, &c->k_attack, &c->k_turbo,
-        &c->k_coin, &c->k_start1
+        &c->k_coin, &c->k_start1, &c->k_reset
     };
     return arr[i];
 }
-#define NUM_KEYS 9
+#define NUM_KEYS 10
 
 // Joystick names for display
 static const char *joy_row_labels[] = {
@@ -233,7 +233,7 @@ static const char *main_items[] = {
 #define MAIN_N 4
 
 static void draw_main(SDL_Renderer *r, int sel) {
-    draw_chrome(r, "WONDER BOY: MONSTER LAND");
+    draw_chrome(r, "Dragon Is a UFO!!");
     int y0 = CY(5);
     for (int i = 0; i < MAIN_N; i++) {
         int y = y0 + i * 18;

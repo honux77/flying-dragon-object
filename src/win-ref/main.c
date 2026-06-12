@@ -58,11 +58,11 @@ static void poll_input(system2 *m, const wbml_cfg *cfg, SDL_Joystick *joy) {
 }
 
 int main(int argc, char **argv) {
-    const char *romdir = (argc > 1) ? argv[1] : "roms/wbml";
+    const char *romdir = (argc > 1) ? argv[1] : "roms";
 
     static system2 m;
     if (machine_init(&m, romdir)) {
-        fprintf(stderr, "machine_init failed (check ROM path: %s)\n", romdir);
+        fprintf(stderr, "Place the ROM files listed above in '%s/' and retry.\n", romdir);
         return 1;
     }
 
@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
 
     int scale = 3;
     SDL_Window *win = SDL_CreateWindow(
-        "Wonder Boy: Monster Land - reference",
+        "Flying Dragon Object",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         DISP_W * scale, DISP_H * scale, SDL_WINDOW_RESIZABLE);
     SDL_Renderer *ren = SDL_CreateRenderer(
@@ -164,6 +164,10 @@ int main(int argc, char **argv) {
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) running = 0;
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) running = 0;
+            if (e.type == SDL_KEYDOWN && e.key.keysym.scancode == cfg.k_reset) {
+                machine_reset(&m);
+                frame = 0;
+            }
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F12) {
                 char name[64];
                 snprintf(name, sizeof(name), "build/frame_%ld.ppm", frame);

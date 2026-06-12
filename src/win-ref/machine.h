@@ -70,6 +70,9 @@ typedef struct {
 // Returns 0 on success, non-zero if a ROM file is missing.
 int machine_init(system2 *m, const char *romdir);
 
+// Soft-reset: re-initialises CPUs and clears RAM without reloading ROMs.
+void machine_reset(system2 *m);
+
 // Run one ~1/60s video frame: executes main + sound CPU cycles (interleaved)
 // and fires the VBLANK / sound interrupts, renders into the framebuffer, and
 // produces stereo-interleaved? no — mono audio samples into `audio` (one int16

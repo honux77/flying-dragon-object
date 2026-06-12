@@ -278,6 +278,52 @@ int machine_init(system2 *m, const char *romdir) {
     return 0;
 }
 
+void machine_reset(system2 *m) {
+    // Preserve decoded ROMs and DIP switches, clear everything else.
+    uint8_t swa = m->in.swa, swb = m->in.swb;
+
+    memset(m->ram,          0, sizeof(m->ram));
+    memset(m->spriteram,    0, sizeof(m->spriteram));
+    memset(m->paletteram,   0, sizeof(m->paletteram));
+    memset(m->videoram,     0, sizeof(m->videoram));
+    memset(m->soundram,     0, sizeof(m->soundram));
+    memset(m->mix_collide,    0, sizeof(m->mix_collide));
+    memset(m->sprite_collide, 0, sizeof(m->sprite_collide));
+    m->mix_collide_summary = 0;
+    m->sprite_collide_summary = 0;
+
+    m->bank1 = 0;
+    m->videoram_bank = 0;
+    m->video_mode = 0;
+    m->flip = 0;
+    m->soundlatch = 0;
+    m->ppi_portc = 0xc0;
+    m->videoram_bank = m->ppi_portc;
+    m->sound_nmi_mask = 1;
+    m->sound_nmi_prev = 1;
+
+    z80_init(&m->maincpu);
+    m->maincpu.userdata   = m;
+    m->maincpu.read_byte  = main_read;
+    m->maincpu.write_byte = main_write;
+    m->maincpu.fetch_opcode = main_fetch;
+    m->maincpu.port_in    = main_port_in;
+    m->maincpu.port_out   = main_port_out;
+
+    z80_init(&m->soundcpu);
+    m->soundcpu.userdata   = m;
+    m->soundcpu.read_byte  = sound_read;
+    m->soundcpu.write_byte = sound_write;
+    m->soundcpu.port_in    = sound_port_in;
+    m->soundcpu.port_out   = sound_port_out;
+
+    sn_init(&m->sn1, SOUND_XTAL / 4, AUDIO_SAMPLE_RATE);
+    sn_init(&m->sn2, SOUND_XTAL / 2, AUDIO_SAMPLE_RATE);
+
+    m->in.swa = swa;
+    m->in.swb = swb;
+}
+
 // Run both CPUs interleaved in slices so the sound latch handshake and audio
 // register writes line up with their timing; generate audio per slice.
 #define SLICES 8
