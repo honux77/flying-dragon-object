@@ -383,6 +383,38 @@ int machine_run_frame(system2 *m, uint32_t *framebuffer, int16_t *audio) {
 }
 
 // ---------------------------------------------------------------------------
+// Save / load state
+// ---------------------------------------------------------------------------
+
+void machine_save(const system2 *m, savestate *s) {
+    memcpy(s->ram,        m->ram,        sizeof(s->ram));
+    memcpy(s->spriteram,  m->spriteram,  sizeof(s->spriteram));
+    memcpy(s->paletteram, m->paletteram, sizeof(s->paletteram));
+    memcpy(s->soundram,   m->soundram,   sizeof(s->soundram));
+    s->bank1        = m->bank1;
+    s->videoram_bank = m->videoram_bank;
+    s->video_mode   = m->video_mode;
+    s->flip         = m->flip;
+    s->soundlatch   = m->soundlatch;
+    s->ppi_portc    = m->ppi_portc;
+    s->valid        = 1;
+}
+
+void machine_load(system2 *m, const savestate *s) {
+    if (!s->valid) return;
+    memcpy(m->ram,        s->ram,        sizeof(s->ram));
+    memcpy(m->spriteram,  s->spriteram,  sizeof(s->spriteram));
+    memcpy(m->paletteram, s->paletteram, sizeof(s->paletteram));
+    memcpy(m->soundram,   s->soundram,   sizeof(s->soundram));
+    m->bank1        = s->bank1;
+    m->videoram_bank = s->videoram_bank;
+    m->video_mode   = s->video_mode;
+    m->flip         = s->flip;
+    m->soundlatch   = s->soundlatch;
+    m->ppi_portc    = s->ppi_portc;
+}
+
+// ---------------------------------------------------------------------------
 // Difficulty / cheat patches
 // ---------------------------------------------------------------------------
 

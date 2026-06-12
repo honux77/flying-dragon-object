@@ -387,6 +387,42 @@ static void draw_joy_hint(SDL_Renderer *r, int sel, int detecting) {
 }
 
 // ---------------------------------------------------------------------------
+// OSD (on-screen display) overlay — call after SDL_RenderCopy of game texture
+// ---------------------------------------------------------------------------
+void osd_draw(SDL_Renderer *r, const char *msg, int timer, int max_timer) {
+    (void)max_timer;
+    if (timer <= 0 || !msg || !msg[0]) return;
+    // Fade out in the last 30 frames
+    int alpha = (timer < 30) ? (timer * 255 / 30) : 255;
+
+    int len    = (int)strlen(msg);
+    int box_w  = len * 8 + 8;
+    int box_x  = (256 - box_w) / 2;
+    int box_y  = 224 - 18;
+
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r, 0, 0, 0, (Uint8)(alpha * 3 / 4));
+    SDL_Rect bg = {box_x, box_y, box_w, 12};
+    SDL_RenderFillRect(r, &bg);
+
+    // Draw text pixel by pixel with alpha
+    Col col = {255, 220, 0};
+    for (int i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)msg[i];
+        if (c < 0x20 || c > 0x7E) continue;
+        const uint8_t *g = g_font[c - 0x20];
+        SDL_SetRenderDrawColor(r, col.r, col.g, col.b, (Uint8)alpha);
+        for (int row = 0; row < 8; row++) {
+            uint8_t bits = g[row];
+            for (int bit = 0; bit < 8; bit++)
+                if (bits & (1 << bit))
+                    SDL_RenderDrawPoint(r, box_x + 4 + i * 8 + bit, box_y + 2 + row);
+        }
+    }
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+}
+
+// ---------------------------------------------------------------------------
 // Main menu entry point
 // ---------------------------------------------------------------------------
 int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path) {
