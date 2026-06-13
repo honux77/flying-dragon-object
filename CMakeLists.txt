@@ -43,7 +43,7 @@ target_include_directories(flydo PRIVATE
 )
 
 if(MSVC)
-    target_compile_options(flydo PRIVATE /W4)
+    target_compile_options(flydo PRIVATE /W4 /utf-8)
 else()
     target_compile_options(flydo PRIVATE -Wall -Wextra)
 endif()

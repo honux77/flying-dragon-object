@@ -63,6 +63,8 @@ def load_texts(path):
 def load_nonhangul(mapping_path):
     """Original codes for digits/punctuation from the derived mapping."""
     out = {}
+    if not Path(mapping_path).exists():
+        return out
     for line in Path(mapping_path).read_text(encoding='utf-8').splitlines():
         parts = line.split()
         if len(parts) >= 3 and parts[0] == 'single':
@@ -125,8 +127,12 @@ def main():
     nonhangul.setdefault(',', SPACE)  # no comma tile — render as space
 
     # pristine patched m-6 (so the run is idempotent)
+    # prefer roms/wbmljb/ (new layout), fall back to roms-wbmljb/
+    m6_src = root / 'roms' / 'wbmljb' / 'm-6.bin'
+    if not m6_src.exists():
+        m6_src = root / 'roms-wbmljb' / 'm-6.bin'
     m6 = bytearray(apply_ips(
-        (root / 'roms-wbmljb' / 'm-6.bin').read_bytes(),
+        m6_src.read_bytes(),
         (root / 'korean-patch' / 'wbmljb' / 'm-6k.ips').read_bytes()))
     chunks = split_chunks_at(m6)
     print(f'{len(chunks)} strings, {len(texts)} translations')
@@ -220,7 +226,7 @@ def main():
         for c in text:
             enc = encode_char(c)
             if enc is None:
-                print(f'  [{ci:02x}] cannot encode {c!r} — skipped')
+                print(f'  [{ci:02x}] cannot encode {c!r} - skipped')
                 continue
             toks.append(enc)
         ti = 0
@@ -247,8 +253,9 @@ def main():
         assert len(out) == len(ch), (ci, len(out), len(ch))
         m6[off:off + len(ch)] = bytes(out)
 
-    (root / 'roms-kr' / 'm-6.bin').write_bytes(m6)
-    print(f'wrote roms-kr/m-6.bin ({warns} overflow warnings)')
+    out_m6 = root / 'roms' / 'kr' / 'm-6.bin'
+    out_m6.write_bytes(m6)
+    print(f'wrote {out_m6} ({warns} overflow warnings)')
 
     # ---- emit krtext.h ------------------------------------------------------
     typ = [0] * 256
