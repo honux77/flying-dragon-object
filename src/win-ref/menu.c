@@ -212,7 +212,7 @@ static void fill_rect(SDL_Renderer *r, int x, int y, int w, int h, Col col) {
 // ---------------------------------------------------------------------------
 // Menu state machine
 // ---------------------------------------------------------------------------
-typedef enum { MS_MAIN, MS_KEYS, MS_JOY, MS_CHEAT, MS_HELP } MenuScreen;
+typedef enum { MS_MAIN, MS_ROM, MS_KEYS, MS_JOY, MS_CHEAT, MS_HELP } MenuScreen;
 
 // Action names for keyboard settings
 static const char *k_labels[] = {
@@ -282,6 +282,7 @@ static void draw_chrome(SDL_Renderer *r, const char *title) {
 // MAIN MENU
 // ---------------------------------------------------------------------------
 static const char *main_items[] = {
+    "롬 선택",
     "키보드 설정",
     "조이스틱 설정",
     "난이도",
@@ -290,17 +291,26 @@ static const char *main_items[] = {
     "게임 시작",
     "종료"
 };
-#define MAIN_N         7
-#define MAIN_IDX_DIFF  2
-#define MAIN_IDX_CHEAT 3
-#define MAIN_IDX_HELP  4
-#define MAIN_IDX_START 5
-#define MAIN_IDX_QUIT  6
+#define MAIN_N         8
+#define MAIN_IDX_ROM   0
+#define MAIN_IDX_DIFF  3
+#define MAIN_IDX_CHEAT 4
+#define MAIN_IDX_HELP  5
+#define MAIN_IDX_START 6
+#define MAIN_IDX_QUIT  7
 
 static const char *diff_names[] = { "쉬움", "보통", "어려움" };
 #define DIFF_N 3
 
-static void draw_main(SDL_Renderer *r, int sel, int difficulty, unsigned cheat_flags, int rom_ok) {
+// Last path component of a directory path (e.g. "roms/wbmljb" → "wbmljb").
+static const char *romdir_shortname(const char *path) {
+    const char *s = strrchr(path, '/');
+    if (!s) s = strrchr(path, '\\');
+    return s ? s + 1 : path;
+}
+
+static void draw_main(SDL_Renderer *r, int sel, int difficulty, unsigned cheat_flags,
+                      int rom_ok, const char *rom_name) {
     draw_chrome(r, "드래곤은 UFO다!!");
     if (!rom_ok)
         draw_str_c(r, 128, CY(3), "롬 파일이 없습니다", RED);
@@ -312,6 +322,9 @@ static void draw_main(SDL_Renderer *r, int sel, int difficulty, unsigned cheat_f
         Col c = disabled ? GRAY : (is_sel ? YELLOW : WHITE);
         if (is_sel && !disabled) draw_str(r, CX(2), y, ">", YELLOW);
         draw_str(r, CX(4), y, main_items[i], c);
+        if (i == MAIN_IDX_ROM && rom_name) {
+            draw_str(r, CX(14), y, rom_name, is_sel ? CYAN : GRAY);
+        }
         if (i == MAIN_IDX_DIFF) {
             char buf[24];
             snprintf(buf, sizeof(buf), "< %s >", diff_names[difficulty]);
@@ -321,6 +334,33 @@ static void draw_main(SDL_Renderer *r, int sel, int difficulty, unsigned cheat_f
             draw_str(r, CX(20), y, cheat_flags ? "켜짐" : "꺼짐", cheat_flags ? CYAN : GRAY);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// ROM SELECTION
+// ---------------------------------------------------------------------------
+static void draw_rom_select(SDL_Renderer *r, const char **romdirs, int nromdirs,
+                             const int *romdir_ok, int sel, int active) {
+    draw_chrome_hint(r, "롬 선택", "ENTER:선택  ESC:뒤로");
+    int y0 = CY(3);
+    for (int i = 0; i < nromdirs; i++) {
+        int y = y0 + i * 15;
+        int is_sel = (i == sel);
+        int is_active = (i == active);
+        int ok = romdir_ok ? romdir_ok[i] : 0;
+        Col c = is_sel ? YELLOW : (ok ? WHITE : GRAY);
+        if (is_sel) draw_str(r, CX(1), y, ">", YELLOW);
+        const char *name = romdir_shortname(romdirs[i]);
+        char namebuf[32];
+        if (is_active) snprintf(namebuf, sizeof(namebuf), "[%s]", name);
+        else           SDL_strlcpy(namebuf, name, sizeof(namebuf));
+        draw_str(r, CX(3), y, namebuf, c);
+        draw_str(r, CX(20), y, ok ? "[가능]" : "[없음]", ok ? CYAN : RED);
+    }
+    int y_back = y0 + nromdirs * 15;
+    Col bc = (sel == nromdirs) ? YELLOW : WHITE;
+    if (sel == nromdirs) draw_str(r, CX(1), y_back, ">", YELLOW);
+    draw_str(r, CX(3), y_back, "뒤로", bc);
 }
 
 // ---------------------------------------------------------------------------
@@ -539,7 +579,9 @@ static void draw_help(SDL_Renderer *r, const wbml_cfg *cfg) {
 // ---------------------------------------------------------------------------
 // Main menu entry point
 // ---------------------------------------------------------------------------
-int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path, int rom_ok) {
+int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path,
+             const char **romdirs, int nromdirs, const int *romdir_ok,
+             int *sel_romdir) {
     open_all_joysticks();
 
     MenuScreen screen = MS_MAIN;
@@ -548,13 +590,18 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path, int rom_ok)
     int rebinding = 0;
     int detecting = 0;
     int running = 1;
+    int sel_rom = (sel_romdir && *sel_romdir < nromdirs) ? *sel_romdir : 0;
 
     while (running) {
+        int cur_rom_ok = (nromdirs > 0 && romdir_ok) ? romdir_ok[sel_rom] : 0;
+        const char *cur_rom_name = (nromdirs > 0) ? romdir_shortname(romdirs[sel_rom]) : "";
+
         // Render
         switch (screen) {
-        case MS_MAIN:  draw_main(ren, sel, cfg->difficulty, cfg->cheat_flags, rom_ok); break;
-        case MS_KEYS: draw_keys(ren, cfg, sel, rebinding); break;
-        case MS_JOY:   draw_joy (ren, cfg, sel, detecting);
+        case MS_MAIN:  draw_main(ren, sel, cfg->difficulty, cfg->cheat_flags, cur_rom_ok, cur_rom_name); break;
+        case MS_ROM:   draw_rom_select(ren, romdirs, nromdirs, romdir_ok, sel, sel_rom); break;
+        case MS_KEYS:  draw_keys(ren, cfg, sel, rebinding); break;
+        case MS_JOY:   draw_joy(ren, cfg, sel, detecting);
                        draw_joy_hint(ren, sel, detecting);
                        break;
         case MS_CHEAT: draw_cheat(ren, sel, cfg->cheat_flags); break;
@@ -617,6 +664,7 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path, int rom_ok)
             SDL_Scancode sc = e.key.keysym.scancode;
 
             int max_sel = (screen == MS_MAIN)  ? MAIN_N - 1
+                        : (screen == MS_ROM)   ? nromdirs
                         : (screen == MS_KEYS)  ? NUM_KEYS
                         : (screen == MS_CHEAT) ? CHEAT_N
                         : (screen == MS_HELP)  ? 0
@@ -626,7 +674,8 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path, int rom_ok)
             if (sc == SDL_SCANCODE_DOWN) { sel = (sel < max_sel) ? sel + 1 : 0; continue; }
 
             if (sc == SDL_SCANCODE_ESCAPE) {
-                if (screen == MS_CHEAT) { screen = MS_MAIN; sel = MAIN_IDX_CHEAT; }
+                if (screen == MS_ROM)        { screen = MS_MAIN; sel = MAIN_IDX_ROM; }
+                else if (screen == MS_CHEAT) { screen = MS_MAIN; sel = MAIN_IDX_CHEAT; }
                 else if (screen == MS_HELP)  { screen = MS_MAIN; sel = MAIN_IDX_HELP; }
                 else if (screen != MS_MAIN)  { screen = MS_MAIN; sel = 0; }
                 continue;
@@ -650,16 +699,30 @@ int run_menu(SDL_Renderer *ren, wbml_cfg *cfg, const char *cfg_path, int rom_ok)
                 sc == SDL_SCANCODE_SPACE) {
                 if (screen == MS_MAIN) {
                     switch (sel) {
-                    case 0:              screen = MS_KEYS;  sel = 0; break;
-                    case 1:              screen = MS_JOY;   sel = 0; break;
-                    case MAIN_IDX_CHEAT: screen = MS_CHEAT; sel = 0; break;
-                    case MAIN_IDX_HELP:  screen = MS_HELP;  sel = 0; break;
+                    case MAIN_IDX_ROM:   screen = MS_ROM;   sel = sel_rom; break;
+                    case 1:              screen = MS_KEYS;  sel = 0;       break;
+                    case 2:              screen = MS_JOY;   sel = 0;       break;
+                    case MAIN_IDX_CHEAT: screen = MS_CHEAT; sel = 0;       break;
+                    case MAIN_IDX_HELP:  screen = MS_HELP;  sel = 0;       break;
                     case MAIN_IDX_DIFF:
                         cfg->difficulty = (cfg->difficulty + 1) % DIFF_N;
                         cfg_save(cfg, cfg_path);
                         break;
-                    case MAIN_IDX_START: if (rom_ok) { running = 0; result = 1; } break;
-                    case MAIN_IDX_QUIT:  running = 0; result = 0; break;
+                    case MAIN_IDX_START:
+                        if (cur_rom_ok) {
+                            if (sel_romdir) *sel_romdir = sel_rom;
+                            running = 0; result = 1;
+                        }
+                        break;
+                    case MAIN_IDX_QUIT: running = 0; result = 0; break;
+                    }
+                } else if (screen == MS_ROM) {
+                    if (sel < nromdirs) {
+                        sel_rom = sel;
+                        screen = MS_MAIN; sel = MAIN_IDX_ROM;
+                    } else {
+                        // "뒤로"
+                        screen = MS_MAIN; sel = MAIN_IDX_ROM;
                     }
                 } else if (screen == MS_KEYS) {
                     if (sel == NUM_KEYS) { screen = MS_MAIN; sel = 0; }

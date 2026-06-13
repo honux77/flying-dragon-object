@@ -8,6 +8,80 @@
 #include "cfg.h"
 #include "menu.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dirent.h>
+#include <sys/stat.h>
+#endif
+
+// ---------------------------------------------------------------------------
+// ROM directory scanning
+// ---------------------------------------------------------------------------
+#define ROMDIR_LEN  512
+#define MAX_ROMDIRS 10
+
+// A directory is valid if it contains the sound ROM, which is common to all sets.
+static int romdir_is_valid(const char *dir) {
+    char path[ROMDIR_LEN];
+    snprintf(path, sizeof(path), "%s/epr-11037.126", dir);
+    FILE *f = fopen(path, "rb");
+    if (f) { fclose(f); return 1; }
+    return 0;
+}
+
+static int scan_romdirs(const char *base, char romdirs[][ROMDIR_LEN], int romdir_ok[], int max) {
+    int n = 0;
+
+    // Include the base dir only if it actually contains ROM files.
+    if (romdir_is_valid(base)) {
+        SDL_strlcpy(romdirs[n], base, ROMDIR_LEN);
+        romdir_ok[n] = 1;
+        n++;
+    }
+
+#ifdef _WIN32
+    char pattern[ROMDIR_LEN];
+    snprintf(pattern, sizeof(pattern), "%s\\*", base);
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA(pattern, &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+            if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0) continue;
+            if (n >= max) break;
+            snprintf(romdirs[n], ROMDIR_LEN, "%s/%s", base, fd.cFileName);
+            romdir_ok[n] = romdir_is_valid(romdirs[n]);
+            n++;
+        } while (FindNextFileA(h, &fd));
+        FindClose(h);
+    }
+#else
+    DIR *d = opendir(base);
+    if (d) {
+        struct dirent *ent;
+        while ((ent = readdir(d)) && n < max) {
+            if (ent->d_name[0] == '.') continue;
+            char path[ROMDIR_LEN];
+            snprintf(path, sizeof(path), "%s/%s", base, ent->d_name);
+            struct stat st;
+            if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) continue;
+            SDL_strlcpy(romdirs[n], path, ROMDIR_LEN);
+            romdir_ok[n] = romdir_is_valid(path);
+            n++;
+        }
+        closedir(d);
+    }
+#endif
+    // Fallback: if nothing found at all, show the base dir anyway.
+    if (n == 0) {
+        SDL_strlcpy(romdirs[0], base, ROMDIR_LEN);
+        romdir_ok[0] = 0;
+        n = 1;
+    }
+    return n;
+}
+
 // Korean dialog overlay (krtext.c): repaints Hangul tile text with the
 // Galmuri9 font.  Active only when the Korean-patched ROM set is loaded.
 void krtext_overlay(uint32_t *disp, const system2 *m);
@@ -70,17 +144,22 @@ static void poll_input(system2 *m, const wbml_cfg *cfg, SDL_Joystick *joy) {
 }
 
 int main(int argc, char **argv) {
-    const char *romdir = (argc > 1) ? argv[1] : "roms";
+    const char *rombase = (argc > 1) ? argv[1] : "roms";
 
-    static system2 m;
-    int rom_ok = !machine_init(&m, romdir);
-    if (!rom_ok)
-        fprintf(stderr, "Place the ROM files listed above in '%s/' and retry.\n", romdir);
+    // Scan for ROM directories (base dir + subdirectories).
+    static char romdir_store[MAX_ROMDIRS][ROMDIR_LEN];
+    static int romdir_ok_arr[MAX_ROMDIRS];
+    int nromdirs = scan_romdirs(rombase, romdir_store, romdir_ok_arr, MAX_ROMDIRS);
 
-    // Korean-patched tile ROM? (signature: redrawn ㄱ jamo at tile 0x800)
-    static const uint8_t kr_sig[8] = {0x7c,0x06,0x06,0x06,0x06,0x00,0x00,0x00};
-    int kr_mode = rom_ok && memcmp(m.tilerom + 0x4000, kr_sig, 8) == 0;
-    if (kr_mode) printf("Korean patch detected: Hangul overlay enabled\n");
+    // Build pointer array for run_menu (2D array != char**, must use pointers).
+    const char *romdirs[MAX_ROMDIRS];
+    for (int i = 0; i < nromdirs; i++) romdirs[i] = romdir_store[i];
+
+    // Default to first valid dir; fall back to index 0.
+    int sel_romdir = 0;
+    for (int i = 0; i < nromdirs; i++) {
+        if (romdir_ok_arr[i]) { sel_romdir = i; break; }
+    }
 
     // optional sound-register logging for diagnostics: --snlog or SN_LOG=1
     {
@@ -152,7 +231,8 @@ int main(int argc, char **argv) {
             headless_frames = atoi(argv[i + 1]);
 
     if (!headless_frames) {
-        if (!run_menu(ren, &cfg, cfg_path, rom_ok)) {
+        if (!run_menu(ren, &cfg, cfg_path,
+                      (const char **)romdirs, nromdirs, romdir_ok_arr, &sel_romdir)) {
             SDL_DestroyTexture(tex);
             SDL_DestroyRenderer(ren);
             SDL_DestroyWindow(win);
@@ -160,6 +240,17 @@ int main(int argc, char **argv) {
             return 0;
         }
     }
+
+    // Initialize machine with the selected ROM directory.
+    static system2 m;
+    int rom_ok = !machine_init(&m, romdir_store[sel_romdir]);
+    if (!rom_ok)
+        fprintf(stderr, "ROM load failed from '%s/'\n", romdir_store[sel_romdir]);
+
+    // Korean-patched tile ROM? (signature: redrawn ㄱ jamo at tile 0x800)
+    static const uint8_t kr_sig[8] = {0x7c,0x06,0x06,0x06,0x06,0x00,0x00,0x00};
+    int kr_mode = rom_ok && memcmp(m.tilerom + 0x4000, kr_sig, 8) == 0;
+    if (kr_mode) printf("Korean patch detected: Hangul overlay enabled\n");
 
     // Apply difficulty (DIP switches + easy-mode state)
     machine_set_difficulty(&m, cfg.difficulty);

@@ -80,11 +80,18 @@ def from_decryption(romdir):
 
 def main():
     root = Path(__file__).resolve().parent.parent
-    romdir = root / "roms"
-    bootlegdir = root / "roms-wbmljb"
+    # wbml standard ROMs: prefer roms/wbml/ (new layout), fall back to roms/
+    romdir = root / "roms" / "wbml"
+    if not (romdir / "epr-11031a.90").exists():
+        romdir = root / "roms"
+    # wbmljb bootleg ROMs: prefer roms/wbmljb/ (new layout), fall back to roms-wbmljb/
+    bootlegdir = root / "roms" / "wbmljb"
+    if not (bootlegdir / "wbml.01").exists():
+        bootlegdir = root / "roms-wbmljb"
     patchdir = root / "korean-patch" / "wbmljb"
-    outdir = root / "roms-kr"
-    outdir.mkdir(exist_ok=True)
+    # Output inside roms/ so the ROM selector picks it up automatically
+    outdir = root / "roms" / "kr"
+    outdir.mkdir(parents=True, exist_ok=True)
 
     # 1. Program ROMs: prefer the real wbmljb files (the patch was authored
     #    against them); otherwise derive them by decrypting the wbml set.
@@ -127,7 +134,7 @@ def main():
         (outdir / name).write_bytes(blob)
     for name in COPY_FILES:
         shutil.copyfile(romdir / name, outdir / name)
-    print(f"wrote {outdir}/ — run: ./build/flydo roms-kr")
+    print(f"wrote {outdir}/")
 
 
 if __name__ == "__main__":

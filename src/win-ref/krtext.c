@@ -60,6 +60,18 @@ void krtext_overlay(uint32_t *disp, const system2 *m) {
     if (m->flip) return;
     const uint8_t *vr = m->videoram;  // page 0 = fixed fg layer
 
+    // Dialog detection: SPACE tile (0x82E) only appears inside dialog text
+    // spans (krencode.py pads every translated span with spaces). If no
+    // SPACE tile is present, no dialog is active — skip the overlay to
+    // avoid drawing Korean glyphs on the title screen or hourglass tiles.
+    int dialog_active = 0;
+    for (int i = 0; i < 28 * 32 && !dialog_active; i++) {
+        uint16_t td = vr[i * 2] | (vr[i * 2 + 1] << 8);
+        uint16_t code = ((td >> 4) & 0x800) | (td & 0x7ff);
+        if (code == 0x82E) dialog_active = 1;
+    }
+    if (!dialog_active) return;
+
     for (int ty = 0; ty < 28; ty++) {
         int tx = 0;
         while (tx < 32) {

@@ -242,8 +242,10 @@ int machine_init(system2 *m, const char *romdir) {
     memset(m, 0, sizeof(*m));
     int err = 0;
 
-    // wbmljb bootleg set: unencrypted, opcode/data views shipped separately.
+    // Detect ROM set variant by checking for a key file unique to each set.
     int bootleg = rom_exists(romdir, "wbml.01");
+    int vcd     = !bootleg && rom_exists(romdir, "wbmlvcd.ic90");
+    int wbmld   = !bootleg && !vcd && rom_exists(romdir, "decrypted_epr-11031a.90");
 
     memset(m->mainrom, 0xff, MAINROM_SIZE);
     if (bootleg) {
@@ -253,8 +255,21 @@ int machine_init(system2 *m, const char *romdir) {
         err |= load_bootleg_rom(romdir, "wbml.01", m->opcodes, m->data, 0x00000);
         err |= load_bootleg_rom(romdir, "m-6.bin", m->opcodes, m->data, 0x10000);
         err |= load_bootleg_rom(romdir, "m-7.bin", m->opcodes, m->data, 0x18000);
+    } else if (vcd) {
+        // wbmlvcd: Virtual Console decrypted dump — no MC-8123 key needed.
+        printf("loading wbmlvcd (Virtual Console, decrypted) set from %s/\n", romdir);
+        err |= load(romdir, "wbmlvcd.ic90", m->mainrom, 0x00000, 0x8000);
+        err |= load(romdir, "wbmlvcd.ic91", m->mainrom, 0x10000, 0x8000);
+        err |= load(romdir, "wbmlvcd.ic92", m->mainrom, 0x18000, 0x8000);
+    } else if (wbmld) {
+        // wbmld: same as wbml but main CPU ROMs are pre-decrypted (no key needed).
+        printf("loading wbmld (decrypted) set from %s/\n", romdir);
+        err |= load(romdir, "decrypted_epr-11031a.90", m->mainrom, 0x00000, 0x8000);
+        err |= load(romdir, "decrypted_epr-11032.91",  m->mainrom, 0x10000, 0x8000);
+        err |= load(romdir, "decrypted_epr-11033.92",  m->mainrom, 0x18000, 0x8000);
     } else {
         // main CPU ROMs (region layout per MAME wbml ROM_START)
+        printf("loading wbml (standard encrypted) set from %s/\n", romdir);
         err |= load(romdir, "epr-11031a.90", m->mainrom, 0x00000, 0x8000);
         err |= load(romdir, "epr-11032.91",  m->mainrom, 0x10000, 0x8000);
         err |= load(romdir, "epr-11033.92",  m->mainrom, 0x18000, 0x8000);
@@ -263,9 +278,16 @@ int machine_init(system2 *m, const char *romdir) {
 
     err |= load(romdir, "epr-11037.126", m->soundrom, 0x0000, 0x8000);
 
-    err |= load(romdir, "epr-11034.4", m->tilerom, 0x00000, 0x8000);
-    err |= load(romdir, "epr-11035.5", m->tilerom, 0x08000, 0x8000);
-    err |= load(romdir, "epr-11036.6", m->tilerom, 0x10000, 0x8000);
+    // Tile ROMs: wbmlvcd uses vc.ic4/5/6; all other sets use epr-11034.4/5/6.
+    if (vcd) {
+        err |= load(romdir, "vc.ic4", m->tilerom, 0x00000, 0x8000);
+        err |= load(romdir, "vc.ic5", m->tilerom, 0x08000, 0x8000);
+        err |= load(romdir, "vc.ic6", m->tilerom, 0x10000, 0x8000);
+    } else {
+        err |= load(romdir, "epr-11034.4", m->tilerom, 0x00000, 0x8000);
+        err |= load(romdir, "epr-11035.5", m->tilerom, 0x08000, 0x8000);
+        err |= load(romdir, "epr-11036.6", m->tilerom, 0x10000, 0x8000);
+    }
 
     err |= load(romdir, "epr-11028.87", m->spriterom, 0x00000, 0x8000);
     err |= load(romdir, "epr-11027.86", m->spriterom, 0x08000, 0x8000);
@@ -278,10 +300,15 @@ int machine_init(system2 *m, const char *romdir) {
     err |= load(romdir, "pr5317.37",  m->lookup_prom, 0x0000, 0x0100);
     if (err) return err;
 
-    // MC-8123 decode the whole main region into opcode/data views.
-    // The bootleg set already ships pre-decoded views, so skip it there.
-    if (!bootleg)
+    // Populate opcode/data views from mainrom.
+    if (!bootleg && !vcd && !wbmld)
         mc8123_decode(m->mainrom, m->key, m->opcodes, m->data, MAINROM_SIZE);
+    else if (vcd || wbmld) {
+        // Decrypted dump: plaintext is identical for both opcode and data fetches.
+        memcpy(m->opcodes, m->mainrom, MAINROM_SIZE);
+        memcpy(m->data,    m->mainrom, MAINROM_SIZE);
+    }
+    // bootleg: opcodes/data already filled by load_bootleg_rom above.
 
     // DIP switches default position (all 1 = MAME default / off)
     m->in.swa = 0xff;

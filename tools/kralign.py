@@ -187,7 +187,10 @@ def load_overrides(path):
 
 def main():
     root = Path(__file__).resolve().parent.parent
-    chunks = split_chunks((root / 'roms-kr' / 'm-6.bin').read_bytes())
+    kr_m6 = root / 'roms' / 'kr' / 'm-6.bin'
+    if not kr_m6.exists():
+        kr_m6 = root / 'roms-kr' / 'm-6.bin'
+    chunks = split_chunks(kr_m6.read_bytes())
     texts = load_transcription(root / 'korean-patch' / 'kr_strings.txt')
     ov_singles, ov_bodies = load_overrides(root / 'tools' / 'kr_overrides.txt')
 
@@ -232,6 +235,7 @@ def main():
 
     decoded, unknown = decode_chunks(chunks, singles, bodies)
     out = root / 'build' / 'krmap' / 'decoded.txt'
+    out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, 'w', encoding='utf-8') as f:
         for ci, txt in enumerate(decoded):
             ref = texts.get(ci, '').replace('\n', ' / ')
